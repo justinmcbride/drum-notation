@@ -555,18 +555,13 @@ h3 {
   fill: var(--c, var(--ink));
 }
 
-.score .head,
-.score .mark,
-.score .head-mark,
-.score .grace {
+.score .col .ink {
   transition: fill 0.06s;
 }
 
-.score .col.hl .head,
-.score .col.hl .mark,
-.score .col.hl .head-mark,
-.score .col.hl .grace,
-.score .col.selected .head {
+/* A column holds every mark owned by the notes and rests at one slot, so the whole note lights up. */
+.score .col.hl .ink,
+.score .col.selected .ink {
   fill: var(--hl);
 }
 

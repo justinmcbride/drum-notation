@@ -24,7 +24,12 @@ export interface RenderOptions {
 
 export interface RenderResult {
   svg: SVGSVGElement;
-  /** Column groups (noteheads + markings) keyed by "measure:slot". */
+  /**
+   * Column groups keyed by "measure:slot". Each holds everything that belongs only to the
+   * notes or rests at that slot: heads, stems, flags, ledger lines, fractional beams, dots,
+   * articulations, grace notes and ghost parentheses. Beams shared by several notes are not
+   * included.
+   */
   columns: Map<string, SVGGElement>;
   /** Count labels keyed by "measure:slot". */
   counts: Map<string, SVGTextElement>;
@@ -441,7 +446,8 @@ function drawMeasure(
     el('circle', { cx: r(dx + 0.2 * S), cy: yOf(3), r: 0.22 * S, class: 'ink' }, g);
   }
 
-  const art = el('g', { class: 'stems' }, g);
+  // Beams shared by several notes live outside the columns, and are drawn on top of them.
+  const beams = el('g', { class: 'beams' }, g);
 
   // Rests that are identical in both voices are drawn once, centered on the staff.
   const restKey = (r: RestItem) => `${r.slot}:${r.dur}:${r.measureRest ? 1 : 0}`;
@@ -482,14 +488,14 @@ function drawMeasure(
           }
           rx = colX(rest.slot) + ((1.18 - w) * S) / 2;
         }
-        glyph(g, ch, rx, yOf(pos), 'ink rest');
+        glyph(rest.measureRest ? g : colGroup(rest.slot), ch, rx, yOf(pos), 'ink rest');
         bounds.add(yOf(pos) - 1.6 * S, yOf(pos) + 2 * S);
       }
     }
 
     // Noteheads and stems
     for (const note of vn.notes) {
-      drawNoteHeads(colGroup(note.slot), art, note, colX(note.slot), bounds, opts.colorize);
+      drawNoteHeads(colGroup(note.slot), note, colX(note.slot), bounds, opts.colorize);
     }
 
     // Stems, beams, flags
@@ -498,23 +504,24 @@ function drawMeasure(
       if (grouped.has(note)) continue;
       const tip = voice === 'up' ? headExtent(note).top - 3.5 * S : headExtent(note).bottom + 3.5 * S;
       note.stemEndY = voice === 'up' ? Math.min(tip, yOf(4)) : Math.max(tip, yOf(4));
-      drawStem(art, note);
+      const cg = colGroup(note.slot);
+      drawStem(cg, note);
       if (note.dur < 4) {
         const sx = note.stemX! - (ENGRAVING.stem * S) / 2;
         if (voice === 'up') {
           const ch = note.dur === 1 ? GLYPH.flag16thUp : GLYPH.flag8thUp;
           const ay = note.dur === 1 ? -0.088 : -0.04;
-          glyph(art, ch, sx, note.stemEndY + ay * S);
+          glyph(cg, ch, sx, note.stemEndY + ay * S);
         } else {
           const ch = note.dur === 1 ? GLYPH.flag16thDown : GLYPH.flag8thDown;
           const ay = note.dur === 1 ? 0.128 : 0.132;
-          glyph(art, ch, sx, note.stemEndY + ay * S);
+          glyph(cg, ch, sx, note.stemEndY + ay * S);
         }
       }
       bounds.add(note.stemEndY);
     }
     for (const group of vn.groups) {
-      drawBeamGroup(art, group, voice, bounds);
+      drawBeamGroup(beams, (n) => colGroup(n.slot), group, voice, bounds);
     }
 
     // Dots, rolls, chokes
@@ -579,6 +586,8 @@ function drawMeasure(
     }
   }
 
+  g.appendChild(beams);
+
   // End barline
   if (m.endBar === 'single') {
     rect(g, end - ENGRAVING.thinBarline * S, STAFF_TOP, end, STAFF_BOTTOM, 'ink barline');
@@ -602,7 +611,6 @@ function headExtent(note: NoteItem) {
 
 function drawNoteHeads(
   cg: SVGGElement,
-  art: SVGGElement,
   note: NoteItem,
   x: number,
   bounds: Bounds,
@@ -635,7 +643,7 @@ function drawNoteHeads(
     for (const p of ledgers) {
       const ly = yOf(p);
       rect(
-        art,
+        cg,
         nx - ENGRAVING.ledgerExtension * S,
         ly - (ENGRAVING.ledger * S) / 2,
         nx + (metrics.width + ENGRAVING.ledgerExtension) * S,
@@ -689,7 +697,13 @@ function drawStem(parent: Element, note: NoteItem) {
   rect(parent, note.stemX! - half, note.stemStartY!, note.stemX! + half, note.stemEndY!, 'ink stem');
 }
 
-function drawBeamGroup(parent: Element, group: NoteItem[], voice: Voice, bounds: Bounds) {
+function drawBeamGroup(
+  parent: Element,
+  owner: (note: NoteItem) => Element,
+  group: NoteItem[],
+  voice: Voice,
+  bounds: Bounds,
+) {
   const up = voice === 'up';
   const beamT = ENGRAVING.beam * S;
   const gap = ENGRAVING.beamSpacing * S;
@@ -700,7 +714,7 @@ function drawBeamGroup(parent: Element, group: NoteItem[], voice: Voice, bounds:
   const beamY = up ? Math.min(outer, yOf(4)) : Math.max(outer, yOf(4));
   for (const n of group) {
     n.stemEndY = beamY;
-    drawStem(parent, n);
+    drawStem(owner(n), n);
   }
   const first = group[0];
   const last = group[group.length - 1];
@@ -721,8 +735,9 @@ function drawBeamGroup(parent: Element, group: NoteItem[], voice: Voice, bounds:
     if (n.dur !== 1 || covered.has(i)) return;
     const neighbor = i === 0 ? group[1] : group[i - 1];
     const len = Math.min(1.1 * S, Math.abs(neighbor.stemX! - n.stemX!) / 2);
-    if (i === 0) rect(parent, n.stemX! - half, s1, n.stemX! + len, s2, 'ink beam');
-    else rect(parent, n.stemX! - len, s1, n.stemX! + half, s2, 'ink beam');
+    // A fractional beam belongs to its note alone, so it highlights with it.
+    if (i === 0) rect(owner(n), n.stemX! - half, s1, n.stemX! + len, s2, 'ink beam');
+    else rect(owner(n), n.stemX! - len, s1, n.stemX! + half, s2, 'ink beam');
   });
   bounds.add(beamY);
 }
