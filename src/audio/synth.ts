@@ -80,10 +80,49 @@ function crossStick(t: number, v: number) {
   noise(t, 0.04).connect(filter('bandpass', 2600, 4)).connect(envelope(t, v * 0.6, 0.03)).connect(out);
 }
 
-function tom(t: number, v: number, f0: number) {
-  osc('sine', t, 0.6, f0, f0 * 0.7, 0.35).connect(envelope(t, v * 0.9, 0.5)).connect(out);
-  osc('triangle', t, 0.1, f0 * 2.2, f0 * 1.6, 0.05).connect(envelope(t, v * 0.15, 0.06)).connect(out);
-  noise(t, 0.05).connect(filter('bandpass', 900, 1)).connect(envelope(t, v * 0.2, 0.04)).connect(out);
+/** Pitch (Hz) and ring time (s) per tom: tuned a fourth apart, bigger drums ring longer. */
+const TOMS = {
+  tom1: { f0: 180, decay: 0.6 },
+  tom2: { f0: 135, decay: 0.8 },
+  floorTom: { f0: 100, decay: 1.15 },
+} as const;
+
+/** Circular-membrane overtones: [frequency ratio, level, decay scale]. */
+const TOM_MODES = [
+  [1, 1, 1],
+  [1.59, 0.32, 0.45],
+  [2.14, 0.16, 0.3],
+  [2.65, 0.08, 0.2],
+] as const;
+
+function tom(t: number, v: number, { f0, decay }: { f0: number; decay: number }) {
+  const ac = ctx!;
+  // Harder hits stretch the head more: higher starting pitch and a brighter tone.
+  const bend = 1.25 + 0.25 * Math.min(v, 1.15);
+  const tone = filter('lowpass', f0 * (5 + 9 * Math.min(v, 1)), 0.5);
+  tone.connect(out);
+
+  for (const [ratio, level, decayScale] of TOM_MODES) {
+    const f = f0 * ratio;
+    const len = decay * decayScale;
+    const o = ac.createOscillator();
+    o.frequency.setValueAtTime(f * bend, t);
+    o.frequency.exponentialRampToValueAtTime(f, t + 0.035);
+    o.frequency.exponentialRampToValueAtTime(f * 0.97, t + len);
+    const g = ac.createGain();
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(v * 0.7 * level, t + 0.003);
+    g.gain.setTargetAtTime(0, t + 0.003, len / 5);
+    o.connect(g).connect(tone);
+    o.start(t);
+    o.stop(t + len * 1.6);
+  }
+
+  // Stick hitting the head: a few milliseconds of band-limited noise.
+  noise(t, 0.02)
+    .connect(filter('bandpass', Math.min(f0 * 16, 3200), 0.9))
+    .connect(envelope(t, v * 0.3, 0.012, 0.001))
+    .connect(out);
 }
 
 const METAL_RATIOS = [2, 3, 4.16, 5.43, 6.79, 8.21];
@@ -171,11 +210,9 @@ function strike(hit: Hit, t: number, v: number) {
       if (m.includes('rimshot')) return rimshot(t, v);
       return snare(t, v);
     case 'tom1':
-      return tom(t, v, 230);
     case 'tom2':
-      return tom(t, v, 175);
     case 'floorTom':
-      return tom(t, v, 115);
+      return tom(t, v, TOMS[hit.inst]);
     case 'hihat': {
       if (m.includes('open')) {
         const g = hihat(t, v, 0.6);
