@@ -976,6 +976,144 @@ input[type='range'] {
   font-size: 13px;
 }
 
+
+/* ---------- GitHub link (ported from react-pig-latin-translator) ---------- */
+
+.gh-link {
+  --bubble-dir: -1;
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 30;
+}
+
+.gh-link a {
+  position: relative;
+  display: block;
+}
+
+.gh-mark {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: 40px;
+  height: 40px;
+  transition: transform 0.2s;
+}
+
+.gh-link:hover .gh-mark,
+.gh-link a:focus-visible .gh-mark {
+  transform: scale(1.1);
+}
+
+.gh-bubbles {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.gh-bubble {
+  position: absolute;
+  border-radius: 999px;
+  opacity: 0;
+}
+
+.bubble-1 {
+  background: linear-gradient(to right, #f472b6, #a855f7);
+}
+.bubble-2 {
+  background: linear-gradient(to right, #60a5fa, #06b6d4);
+}
+.bubble-3 {
+  background: linear-gradient(to right, #facc15, #f97316);
+}
+.bubble-4 {
+  background: linear-gradient(to right, #4ade80, #10b981);
+}
+.bubble-5 {
+  background: linear-gradient(to right, #f87171, #ec4899);
+}
+.bubble-6 {
+  background: linear-gradient(to right, #818cf8, #a855f7);
+}
+
+.gh-link:hover .bubble-1,
+.gh-link a:focus-visible .bubble-1 {
+  animation: bubble-float-1 2s ease-out infinite;
+}
+.gh-link:hover .bubble-2,
+.gh-link a:focus-visible .bubble-2 {
+  animation: bubble-float-2 2.2s ease-out infinite 0.2s;
+}
+.gh-link:hover .bubble-3,
+.gh-link a:focus-visible .bubble-3 {
+  animation: bubble-float-3 1.8s ease-out infinite 0.4s;
+}
+.gh-link:hover .bubble-4,
+.gh-link a:focus-visible .bubble-4 {
+  animation: bubble-float-4 2.1s ease-out infinite 0.6s;
+}
+.gh-link:hover .bubble-5,
+.gh-link a:focus-visible .bubble-5 {
+  animation: bubble-float-5 1.9s ease-out infinite 0.8s;
+}
+.gh-link:hover .bubble-6,
+.gh-link a:focus-visible .bubble-6 {
+  animation: bubble-float-6 2.3s ease-out infinite 1s;
+}
+
+/* --bubble-dir flips the float direction (-1 = up, 1 = down). */
+@keyframes bubble-float-1 {
+  0% { transform: translate(0, 0) scale(0); opacity: 0; }
+  10%, 90% { opacity: 1; }
+  100% { transform: translate(-30px, calc(var(--bubble-dir) * 60px)) scale(1); opacity: 0; }
+}
+@keyframes bubble-float-2 {
+  0% { transform: translate(0, 0) scale(0); opacity: 0; }
+  15%, 85% { opacity: 1; }
+  100% { transform: translate(-30px, calc(var(--bubble-dir) * 70px)) scale(1); opacity: 0; }
+}
+@keyframes bubble-float-3 {
+  0% { transform: translate(0, 0) scale(0); opacity: 0; }
+  20%, 80% { opacity: 1; }
+  100% { transform: translate(-25px, calc(var(--bubble-dir) * 55px)) scale(1); opacity: 0; }
+}
+@keyframes bubble-float-4 {
+  0% { transform: translate(0, 0) scale(0); opacity: 0; }
+  25%, 75% { opacity: 1; }
+  100% { transform: translate(-35px, calc(var(--bubble-dir) * 65px)) scale(1); opacity: 0; }
+}
+@keyframes bubble-float-5 {
+  0% { transform: translate(0, 0) scale(0); opacity: 0; }
+  30%, 70% { opacity: 1; }
+  100% { transform: translate(-30px, calc(var(--bubble-dir) * 75px)) scale(1); opacity: 0; }
+}
+@keyframes bubble-float-6 {
+  0% { transform: translate(0, 0) scale(0); opacity: 0; }
+  35%, 65% { opacity: 1; }
+  100% { transform: translate(-40px, calc(var(--bubble-dir) * 50px)) scale(1); opacity: 0; }
+}
+
+/* Without a side gutter, a bottom-right badge would float over cards and the mobile
+   tab bar, so tuck it into the empty right end of the top bar instead. */
+@media (max-width: 1179px) {
+  .gh-link {
+    --bubble-dir: 1;
+    top: calc(var(--gh-top, 13px) + env(safe-area-inset-top));
+    bottom: auto;
+    right: max(16px, env(safe-area-inset-right));
+  }
+
+  .gh-mark {
+    width: 32px;
+    height: 32px;
+  }
+
+  .topbar {
+    padding-right: max(64px, calc(env(safe-area-inset-right) + 48px));
+  }
+}
+
 /* ---------- Mobile ---------- */
 
 @media (max-width: 760px) {
@@ -983,6 +1121,12 @@ input[type='range'] {
     justify-content: center;
     padding-top: max(12px, env(safe-area-inset-top));
     padding-bottom: 12px;
+    /* Mirror the space reserved for the GitHub link so the brand stays centered. */
+    padding-left: max(64px, calc(env(safe-area-inset-right) + 48px));
+  }
+
+  .gh-link {
+    --gh-top: 12px;
   }
 
   .tabs {
@@ -1056,6 +1200,10 @@ input[type='range'] {
 @media (prefers-reduced-motion: reduce) {
   * {
     transition: none !important;
+  }
+
+  .gh-bubble {
+    animation: none !important;
   }
 }
 
