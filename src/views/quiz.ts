@@ -1,8 +1,9 @@
 import { playHit } from '../audio/synth';
 import { TECHNIQUE_GROUPS } from '../data/lessons';
-import { INSTRUMENTS, KEY_ORDER, type Inst } from '../notation/instruments';
+import { INSTRUMENTS, type Inst } from '../notation/instruments';
 import { parseScore, type Hit, type Score, type ScoreSpec } from '../notation/model';
 import { h, ICONS } from '../ui/dom';
+import { getLevel, instrumentsFor, levelToggle, onLevelChange, type Level } from '../ui/level';
 import { mountScore, type ScoreView } from '../ui/score-view';
 
 type Mode = 'drums' | 'hits';
@@ -35,6 +36,12 @@ const TECH_QUESTIONS: { id: string; spec: ScoreSpec }[] = [
   { id: 'choke', spec: { bars: [{ cr: 'k' }] } },
 ];
 
+/** Markings you meet in everyday grooves; the rest are Advanced only. */
+const BASIC_TECHNIQUES = new Set(['accent', 'ghost', 'rimshot', 'cross-stick', 'open-hat', 'closed-hat']);
+
+const techPool = (level: Level) =>
+  level === 'advanced' ? TECH_QUESTIONS : TECH_QUESTIONS.filter((t) => BASIC_TECHNIQUES.has(t.id));
+
 const TECHNIQUES = new Map(TECHNIQUE_GROUPS.flatMap((g) => g.items).map((t) => [t.id, t]));
 
 const shuffle = <T>(arr: T[]) => {
@@ -48,11 +55,12 @@ const shuffle = <T>(arr: T[]) => {
 
 const pick = <T>(arr: T[]) => arr[Math.floor(Math.random() * arr.length)];
 
-function drumQuestion(prev?: string): Question {
-  const inst = pick(KEY_ORDER.filter((i) => INSTRUMENTS[i].name !== prev));
+function drumQuestion(level: Level, prev?: string): Question {
+  const pool = instrumentsFor(level);
+  const inst = pick(pool.filter((i) => INSTRUMENTS[i].name !== prev));
   const info = INSTRUMENTS[inst];
   // Prefer distractors that sit near the answer on the staff.
-  const others = KEY_ORDER.filter((i) => i !== inst).sort(
+  const others = pool.filter((i) => i !== inst).sort(
     (a, b) => Math.abs(INSTRUMENTS[a].pos - info.pos) - Math.abs(INSTRUMENTS[b].pos - info.pos) + (Math.random() - 0.5) * 3,
   );
   const options = shuffle([inst, ...others.slice(0, 3)]).map((i: Inst) => INSTRUMENTS[i].name);
@@ -68,12 +76,13 @@ function drumQuestion(prev?: string): Question {
   };
 }
 
-function hitQuestion(prev?: string): Question {
-  const q = pick(TECH_QUESTIONS.filter((t) => TECHNIQUES.get(t.id)!.title !== prev));
+function hitQuestion(level: Level, prev?: string): Question {
+  const pool = techPool(level);
+  const q = pick(pool.filter((t) => TECHNIQUES.get(t.id)!.title !== prev));
   const tech = TECHNIQUES.get(q.id)!;
   const score = parseScore({ time: [1, 4], grid: 1, ...q.spec });
   const hit = [...score.measures[0].hits.values()][0][0];
-  const others = shuffle(TECH_QUESTIONS.filter((t) => t.id !== q.id)).slice(0, 3);
+  const others = shuffle(pool.filter((t) => t.id !== q.id)).slice(0, 3);
   const options = shuffle([q, ...others]).map((t) => TECHNIQUES.get(t.id)!.title);
   return {
     score,
@@ -137,7 +146,8 @@ export function quizView(root: HTMLElement) {
   nextBtn.addEventListener('click', () => next());
 
   function next() {
-    question = mode === 'drums' ? drumQuestion(question?.answer) : hitQuestion(question?.answer);
+    const level = getLevel();
+    question = mode === 'drums' ? drumQuestion(level, question?.answer) : hitQuestion(level, question?.answer);
     answered = false;
     view?.destroy();
     view = mountScore(paper, question.score, { timeSig: false, rests: false, barlines: false, spacePx: 16 });
@@ -182,6 +192,12 @@ export function quizView(root: HTMLElement) {
     updateStats();
   }
 
+  // An unanswered question may use cards from the other level, so swap it out.
+  // An answered one stays on screen; the next question follows the new level.
+  onLevelChange(answers, () => {
+    if (!answered) next();
+  });
+
   root.append(
     h(
       'section',
@@ -193,7 +209,12 @@ export function quizView(root: HTMLElement) {
     h(
       'div',
       { class: 'quiz-top' },
-      h('div', { class: 'segmented', role: 'group', 'aria-label': 'Quiz mode' }, modeButtons),
+      h(
+        'div',
+        { class: 'quiz-controls' },
+        h('div', { class: 'segmented', role: 'group', 'aria-label': 'Quiz mode' }, modeButtons),
+        levelToggle(),
+      ),
       h('div', { class: 'stats' }, sScore.el, sStreak.el, sBest.el),
     ),
     h(

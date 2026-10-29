@@ -1,29 +1,37 @@
 import { playHit } from '../audio/synth';
 import { GROOVES } from '../data/grooves';
 import { HEADS } from '../notation/glyphs';
-import { INSTRUMENTS, KEY_ORDER, type Inst } from '../notation/instruments';
+import { INSTRUMENTS, type Inst } from '../notation/instruments';
 import { parseScore, type Score } from '../notation/model';
 import { glyphIcon, h, ICONS, playButton } from '../ui/dom';
 import { isActive, playScore, stopPlayback } from '../ui/playback';
 import { mountScore } from '../ui/score-view';
+import { getLevel, instrumentsFor, levelToggle, onLevelChange } from '../ui/level';
 import type { Player } from '../audio/player';
 
-function keyScore(): Score {
+function keyScore(insts: Inst[]): Score {
   return {
     beats: 1,
     beatUnit: 4,
     slots: 4,
     repeat: false,
-    measures: KEY_ORDER.map((inst) => ({ hits: new Map([[0, [{ inst, mods: [] }]]]) })),
+    measures: insts.map((inst) => ({ hits: new Map([[0, [{ inst, mods: [] }]]]) })),
   };
 }
 
-export function staffView(root: HTMLElement) {
+function keyLabels(insts: Inst[]) {
   const labels: Record<string, string> = {};
-  KEY_ORDER.forEach((inst, i) => (labels[`${i}:0`] = INSTRUMENTS[inst].short));
+  insts.forEach((inst, i) => (labels[`${i}:0`] = INSTRUMENTS[inst].short));
+  return labels;
+}
+
+export function staffView(root: HTMLElement) {
+  let insts = instrumentsFor(getLevel());
+  let shown: Inst | null = null;
 
   const info = h('div', { class: 'info-panel', 'aria-live': 'polite' });
   const showInfo = (inst: Inst | null) => {
+    shown = inst;
     if (!inst) {
       info.replaceChildren(
         h('div', { class: 'swatch', style: { background: 'var(--paper)' } }, glyphIcon('\uE0A4', 16)),
@@ -53,8 +61,8 @@ export function staffView(root: HTMLElement) {
   let selected: Element | null = null;
   const view = mountScore(
     paper,
-    keyScore(),
-    { timeSig: false, rests: false, barlines: false, colorize: true, labels, hitAreas: true, spacePx: 12 },
+    keyScore(insts),
+    { timeSig: false, rests: false, barlines: false, colorize: true, labels: keyLabels(insts), hitAreas: true, spacePx: 12 },
     () => (selected = null),
   );
   paper.addEventListener('click', (e) => {
@@ -69,13 +77,21 @@ export function staffView(root: HTMLElement) {
     playHit({ inst, mods: [] });
     showInfo(inst);
   });
-  void view;
 
-  const legend = h(
-    'div',
-    { class: 'legend' },
-    KEY_ORDER.map((id) => h('span', {}, h('i', { style: { background: INSTRUMENTS[id].color } }), INSTRUMENTS[id].short)),
-  );
+  const legend = h('div', { class: 'legend' });
+  const fillLegend = () =>
+    legend.replaceChildren(
+      ...insts.map((id) => h('span', {}, h('i', { style: { background: INSTRUMENTS[id].color } }), INSTRUMENTS[id].short)),
+    );
+  fillLegend();
+
+  const keyCard = h('article', { class: 'card key-card' });
+  onLevelChange(keyCard, (level) => {
+    insts = instrumentsFor(level);
+    view.update(keyScore(insts), { labels: keyLabels(insts) });
+    fillLegend();
+    if (shown && !insts.includes(shown)) showInfo(null);
+  });
 
   const explainers = h(
     'div',
@@ -93,7 +109,13 @@ export function staffView(root: HTMLElement) {
         figure('\uE1D6', 'feet'),
       ),
       'Stems: hands up, feet down',
-      'Drum music is usually written in two voices. Sticks get stems pointing up; the bass drum and hi-hat pedal point down.',
+      h(
+        'span',
+        {},
+        'Drum music is usually written in two voices. Sticks get stems pointing up; feet point down, like the bass drum',
+        h('span', { class: 'advanced-only' }, ' and hi-hat pedal'),
+        '.',
+      ),
     ),
     explainer(
       h(
@@ -101,11 +123,16 @@ export function staffView(root: HTMLElement) {
         { class: 'art' },
         figure('\uE0A4', 'drums'),
         figure('\uE0A9', 'cymbals'),
-        figure('\uE0DB', 'bell'),
-        figure('\uE0BE', 'cowbell'),
+        figure('\uE0DB', 'bell', 'advanced-only'),
+        figure('\uE0BE', 'cowbell', 'advanced-only'),
       ),
       'Noteheads tell the sound',
-      'Round noteheads are drums. An x means a cymbal. Special shapes mark special sounds like the ride bell.',
+      h(
+        'span',
+        {},
+        'Round noteheads are drums. An x means a cymbal.',
+        h('span', { class: 'advanced-only' }, ' Special shapes mark special sounds like the ride bell and cowbell.'),
+      ),
     ),
     explainer(
       h('div', { class: 'art' }, h('span', { class: 'stack' }, glyphIcon('\uE084', 13), glyphIcon('\uE084', 13))),
@@ -125,6 +152,21 @@ export function staffView(root: HTMLElement) {
   });
   const rockView = mountScore(rockPaper, rockScore, { colorize: true, counts: true, spacePx: 11 });
 
+  keyCard.append(
+    h('div', { class: 'card-head' }, h('h2', {}, 'The drum key'), levelToggle()),
+    h(
+      'p',
+      {},
+      'Low drums sit low on the staff, cymbals sit on top. Notes are colored by instrument. ',
+      h('span', { class: 'basic-only' }, 'Basic shows a standard kit; switch to Advanced for the hi-hat pedal, ride bell, china and cowbell.'),
+      h('span', { class: 'advanced-only' }, 'Advanced adds the hi-hat pedal, ride bell, china and cowbell to the standard kit.'),
+    ),
+    paper,
+    h('div', { class: 'key-hint', html: `${ICONS.speaker.replace('<svg', '<svg width="18" height="18"')} Tap a note to play it` }),
+    legend,
+    info,
+  );
+
   root.append(
     h(
       'section',
@@ -137,16 +179,7 @@ export function staffView(root: HTMLElement) {
         'Drum music uses the familiar five-line staff, but instead of pitches each position is a piece of the kit. Learn where every drum and cymbal lives — tap a note to hear it.',
       ),
     ),
-    h(
-      'article',
-      { class: 'card key-card' },
-      h('div', { class: 'card-head' }, h('h2', {}, 'The drum key')),
-      h('p', {}, 'Low drums sit low on the staff, cymbals sit on top. Notes are colored by instrument.'),
-      paper,
-      h('div', { class: 'key-hint', html: `${ICONS.speaker.replace('<svg', '<svg width="18" height="18"')} Tap a note to play it` }),
-      legend,
-      info,
-    ),
+    keyCard,
     h(
       'section',
       { class: 'section' },
@@ -179,10 +212,10 @@ export function staffView(root: HTMLElement) {
   );
 }
 
-function figure(glyph: string, caption: string) {
-  return h('figure', {}, glyphIcon(glyph, 11), h('figcaption', {}, caption));
+function figure(glyph: string, caption: string, className?: string) {
+  return h('figure', { class: className }, glyphIcon(glyph, 11), h('figcaption', {}, caption));
 }
 
-function explainer(art: HTMLElement, title: string, body: string) {
+function explainer(art: HTMLElement, title: string, body: string | HTMLElement) {
   return h('article', { class: 'card explainer' }, art, h('h3', {}, title), h('p', {}, body));
 }

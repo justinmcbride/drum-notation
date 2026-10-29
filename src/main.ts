@@ -1,5 +1,6 @@
 import './styles.css';
 import { gitHubLink } from './ui/github-link';
+import { applyLevel } from './ui/level';
 import { stopPlayback } from './ui/playback';
 import { staffView } from './views/staff';
 import { rhythmView } from './views/rhythm';
@@ -17,6 +18,7 @@ const ROUTES: Record<string, View> = {
   quiz: quizView,
 };
 
+applyLevel();
 const root = document.getElementById('view')!;
 document.body.append(gitHubLink());
 let currentRoute = '';

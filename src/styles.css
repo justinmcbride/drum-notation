@@ -830,6 +830,26 @@ input[type='range'] {
   margin-top: 12px;
 }
 
+/* ---------- Basic / Advanced level ---------- */
+
+:root[data-level='basic'] .advanced-only,
+:root[data-level='advanced'] .basic-only {
+  display: none !important;
+}
+
+.key-card .card-head {
+  flex-wrap: wrap;
+}
+
+.key-card .card-head h2 {
+  flex: 1;
+}
+
+.segmented.level-toggle button {
+  padding: 6px 14px;
+  min-height: 34px;
+}
+
 /* ---------- Quiz ---------- */
 
 .quiz-top {
@@ -839,6 +859,12 @@ input[type='range'] {
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 16px;
+}
+
+.quiz-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
 .segmented {
