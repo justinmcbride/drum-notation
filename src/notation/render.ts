@@ -13,6 +13,11 @@ export interface RenderOptions {
   clef?: boolean;
   timeSig?: boolean;
   rests?: boolean;
+  /**
+   * Draw rests in the lower (feet) voice. Rests shared by both voices are always drawn when
+   * `rests` is on. Default true.
+   */
+  downRests?: boolean;
   barlines?: boolean;
   colorize?: boolean;
   counts?: boolean;
@@ -170,6 +175,17 @@ function notateVoice(hits: Map<number, Hit[]>, beats: number, voice: Voice): Voi
   return { notes, rests, groups };
 }
 
+const restKey = (r: RestItem) => `${r.slot}:${r.dur}:${r.measureRest ? 1 : 0}`;
+
+/** Rests to draw for one voice, honoring `downRests`. A rest identical in both voices counts as shared. */
+function visibleRests(voices: Partial<Record<Voice, VoiceNotation>>, voice: Voice, opts: { rests: boolean; downRests: boolean }) {
+  const vn = voices[voice];
+  if (!vn || !opts.rests) return [];
+  if (voice === 'up' || opts.downRests || !voices.up) return vn.rests;
+  const upRests = new Set(voices.up.rests.map(restKey));
+  return vn.rests.filter((x) => upRests.has(restKey(x)));
+}
+
 function splitVoices(measure: Measure) {
   const up = new Map<number, Hit[]>();
   const down = new Map<number, Hit[]>();
@@ -206,9 +222,11 @@ function layoutMeasures(score: Score, opts: Required<Omit<RenderOptions, 'labels
     if (hasVoice.down) voices.down = notateVoice(down, score.beats, 'down');
 
     const colSlots = new Set<number>();
-    for (const v of Object.values(voices)) {
-      v.notes.forEach((n) => colSlots.add(n.slot));
-      if (opts.rests) v.rests.filter((x) => !x.measureRest).forEach((x) => colSlots.add(x.slot));
+    for (const voice of ['up', 'down'] as Voice[]) {
+      voices[voice]?.notes.forEach((n) => colSlots.add(n.slot));
+      visibleRests(voices, voice, opts)
+        .filter((x) => !x.measureRest)
+        .forEach((x) => colSlots.add(x.slot));
     }
     const sorted = [...colSlots].sort((a, b) => a - b);
     const columns: Column[] = sorted.map((slot, i) => {
@@ -263,6 +281,7 @@ export function renderScore(score: Score, options: RenderOptions): RenderResult 
     clef: true,
     timeSig: true,
     rests: true,
+    downRests: true,
     barlines: true,
     colorize: false,
     counts: false,
@@ -450,7 +469,6 @@ function drawMeasure(
   const beams = el('g', { class: 'beams' }, g);
 
   // Rests that are identical in both voices are drawn once, centered on the staff.
-  const restKey = (r: RestItem) => `${r.slot}:${r.dur}:${r.measureRest ? 1 : 0}`;
   const downRests = new Set((m.voices.down?.rests ?? []).map(restKey));
   const shared = new Set((m.voices.up?.rests ?? []).map(restKey).filter((k) => downRests.has(k)));
 
@@ -461,7 +479,7 @@ function drawMeasure(
 
     // Rests
     if (opts.rests) {
-      for (const rest of vn.rests) {
+      for (const rest of visibleRests(m.voices, voice, opts)) {
         const isShared = shared.has(restKey(rest));
         if (isShared && voice === 'down') continue;
         const off = multi && !isShared ? (voice === 'up' ? 2 : -4) : 0;

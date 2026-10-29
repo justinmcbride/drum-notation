@@ -1254,3 +1254,30 @@ input[type='range'] {
   display: block;
   overflow: visible;
 }
+
+/* Quieter toggle for an optional notation detail, with its one-line explanation. */
+.toggle.subtle {
+  align-self: center;
+  min-height: 32px;
+  padding: 4px 10px;
+  font-size: 13px;
+  font-weight: 500;
+  background: transparent;
+  border-style: dashed;
+}
+
+.toggle.subtle::before {
+  width: 22px;
+  height: 13px;
+  background-image: radial-gradient(circle at 6.5px 50%, #fff 4px, transparent 4.5px);
+}
+
+.toggle.subtle[aria-pressed='true']::before {
+  background-image: radial-gradient(circle at 15.5px 50%, #fff 4px, transparent 4.5px);
+}
+
+.toggle-note {
+  margin: 8px 0 0;
+  font-size: 12.5px;
+  color: var(--muted);
+}
