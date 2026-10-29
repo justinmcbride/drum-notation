@@ -32,6 +32,11 @@
   box-sizing: border-box;
 }
 
+/* Keep the hidden attribute authoritative over component display rules like .btn. */
+[hidden] {
+  display: none !important;
+}
+
 html {
   -webkit-text-size-adjust: 100%;
   scroll-padding-top: 80px;
@@ -78,10 +83,23 @@ button {
   gap: 24px;
   padding: 10px max(20px, env(safe-area-inset-left));
   padding-top: max(10px, env(safe-area-inset-top));
+  border-bottom: 1px solid var(--line);
+}
+
+/*
+ * The frosted background lives on a pseudo-element: backdrop-filter on .topbar itself would
+ * make it the containing block for the fixed mobile tab bar inside it, pinning that bar to
+ * the top bar instead of the bottom of the viewport.
+ */
+.topbar::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
   background: rgba(13, 16, 32, 0.78);
   backdrop-filter: saturate(160%) blur(16px);
   -webkit-backdrop-filter: saturate(160%) blur(16px);
-  border-bottom: 1px solid var(--line);
+  pointer-events: none;
 }
 
 .brand {
