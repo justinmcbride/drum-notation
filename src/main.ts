@@ -8,7 +8,8 @@ import { hitsView } from './views/hits';
 import { groovesView } from './views/grooves';
 import { quizView } from './views/quiz';
 
-type View = (root: HTMLElement, param?: string) => void;
+/** A view may return an updater to switch its param in place instead of being rebuilt. */
+type View = (root: HTMLElement, param?: string) => void | ((param?: string) => void);
 
 const ROUTES: Record<string, View> = {
   staff: staffView,
@@ -22,6 +23,7 @@ applyLevel();
 const root = document.getElementById('view')!;
 document.body.append(gitHubLink());
 let currentRoute = '';
+let updateView: ((param?: string) => void) | null = null;
 
 function route() {
   const [name = 'staff', param] = location.hash.replace(/^#\/?/, '').split('/');
@@ -37,9 +39,23 @@ function route() {
   if (routeKey === currentRoute) return;
   const sameView = currentRoute.split('/')[0] === key;
   currentRoute = routeKey;
+  if (sameView && updateView) {
+    updateView(param);
+    return;
+  }
+  if (!sameView) {
+    root.replaceChildren();
+    updateView = ROUTES[key](root, param) || null;
+    window.scrollTo({ top: 0 });
+    return;
+  }
+  // Rebuilding the same view: hold the page height so the browser doesn't clamp the scroll position.
+  const y = window.scrollY;
+  root.style.minHeight = `${root.offsetHeight}px`;
   root.replaceChildren();
-  ROUTES[key](root, param);
-  if (!sameView) window.scrollTo({ top: 0 });
+  updateView = ROUTES[key](root, param) || null;
+  window.scrollTo({ top: y, behavior: 'instant' });
+  requestAnimationFrame(() => requestAnimationFrame(() => root.style.removeProperty('min-height')));
 }
 
 async function boot() {

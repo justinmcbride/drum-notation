@@ -1156,6 +1156,10 @@ input[type='range'] {
 /* ---------- Mobile ---------- */
 
 @media (max-width: 760px) {
+  html {
+    scroll-padding-bottom: calc(var(--tab-h) + 16px);
+  }
+
   .topbar {
     justify-content: center;
     padding-top: max(12px, env(safe-area-inset-top));
