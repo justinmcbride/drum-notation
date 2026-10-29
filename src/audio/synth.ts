@@ -1,4 +1,5 @@
 import type { Hit } from '../notation/model';
+import { HAT_RINGING, chokeKeyFor, chokeSamples, initSamples, playSample, sampleKeyFor } from './samples';
 
 let ctx: AudioContext | null = null;
 let out: GainNode;
@@ -15,6 +16,7 @@ export function audioContext(): AudioContext {
     out = ctx.createGain();
     out.gain.value = 0.9;
     out.connect(comp).connect(ctx.destination);
+    initSamples(ctx, comp);
     const len = ctx.sampleRate * 2;
     noiseBuffer = ctx.createBuffer(1, len, ctx.sampleRate);
     const data = noiseBuffer.getChannelData(0);
@@ -200,7 +202,8 @@ export function click(t: number, strong: boolean) {
   osc('sine', t, 0.05, strong ? 1760 : 1320).connect(envelope(t, strong ? 0.35 : 0.2, 0.04)).connect(out);
 }
 
-function strike(hit: Hit, t: number, v: number) {
+/** Synthesized voices: used until a sample has loaded, or if it can't be loaded. */
+function synthStrike(hit: Hit, t: number, v: number) {
   const m = hit.mods;
   switch (hit.inst) {
     case 'kick':
@@ -237,6 +240,24 @@ function strike(hit: Hit, t: number, v: number) {
   }
 }
 
+/** chokeAfter: written note length, for a choked cymbal's main stroke (grace notes and roll strokes omit it). */
+function strike(hit: Hit, t: number, v: number, chokeAfter?: number) {
+  if (hit.inst === 'hihat' || hit.inst === 'hihatFoot') {
+    // Any hi-hat stroke or pedal closes the hats, cutting off a ringing open hat.
+    chokeOpenHat(t);
+    chokeSamples(HAT_RINGING, t, hit.mods.includes('open') ? 0.04 : 0.012);
+  }
+  const key = sampleKeyFor(hit);
+  if (!playSample(key, t, v)) return synthStrike(hit, t, v);
+  const chokeKey = chokeKeyFor(key);
+  if (chokeKey && chokeAfter !== undefined && hit.mods.includes('choke')) {
+    // Let the cymbal speak for the written note (within limits), then grab it.
+    const at = t + Math.min(0.45, Math.max(0.12, chokeAfter * 0.9));
+    chokeSamples([key], at, 0.02);
+    playSample(chokeKey, at, Math.min(1, v));
+  }
+}
+
 export interface HitTiming {
   /** Length of the written note, in seconds. */
   noteSec: number;
@@ -260,7 +281,7 @@ export function playHit(hit: Hit, t?: number, timing: HitTiming = { noteSec: 0.5
   }
   if (m.includes('buzz')) {
     const end = when + timing.noteSec * 0.92;
-    strike(hit, when, v);
+    strike(hit, when, v, timing.noteSec);
     for (let s = when + 0.022; s < end; s += 0.022) strike(hit, s, v * 0.28);
     return;
   }
@@ -270,5 +291,5 @@ export function playHit(hit: Hit, t?: number, timing: HitTiming = { noteSec: 0.5
     for (let s = when, i = 0; s < end; s += step, i++) strike(hit, s, i === 0 ? v : v * 0.75);
     return;
   }
-  strike(hit, when, v);
+  strike(hit, when, v, timing.noteSec);
 }

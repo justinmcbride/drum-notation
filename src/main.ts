@@ -1,4 +1,5 @@
 import './styles.css';
+import { prefetchSamples } from './audio/samples';
 import { gitHubLink } from './ui/github-link';
 import { applyLevel } from './ui/level';
 import { stopPlayback } from './ui/playback';
@@ -66,6 +67,7 @@ async function boot() {
   }
   window.addEventListener('hashchange', route);
   route();
+  prefetchSamples();
 }
 
 void boot();

@@ -1,5 +1,6 @@
 import type { Score } from '../notation/model';
 import { voiceOf } from '../notation/model';
+import { ensureSamples, scoreSampleKeys } from './samples';
 import { audioContext, click, playHit } from './synth';
 
 export interface PlayerOptions {
@@ -22,6 +23,7 @@ export class Player {
   private nextTime = 0;
   private visual: { time: number; m: number; s: number }[] = [];
   private endTime: number | null = null;
+  private run = 0;
   playing = false;
 
   constructor(
@@ -37,6 +39,14 @@ export class Player {
     const ac = audioContext();
     this.stop(false);
     this.playing = true;
+    const run = this.run;
+    // Give the recorded samples a moment to load; anything still missing plays synthesized.
+    void ensureSamples(scoreSampleKeys(this.score)).then(() => {
+      if (this.playing && run === this.run) this.begin(ac);
+    });
+  }
+
+  private begin(ac: AudioContext) {
     this.measure = 0;
     this.slot = 0;
     this.endTime = null;
@@ -60,6 +70,7 @@ export class Player {
 
   stop(notify = true) {
     const wasPlaying = this.playing;
+    this.run++;
     if (this.timer !== null) clearInterval(this.timer);
     cancelAnimationFrame(this.raf);
     this.timer = null;

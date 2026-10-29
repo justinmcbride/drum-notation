@@ -1,0 +1,46 @@
+Drum samples in this folder
+===========================
+
+kick-*, snare-*, rimshot-*, sidestick-*, tom-*, hihat-*, ride-*, crash-*, china-*
+  From "Big Rusty Drums" by Karoryfer Samples
+  https://github.com/sfzinstruments/karoryfer.big-rusty-drums
+  License: CC0 1.0 (public domain), https://creativecommons.org/publicdomain/zero/1.0/
+  Changes: selected layers, microphones mixed to mono, trimmed, faded, level-adjusted, re-encoded.
+
+cowbell-avl-1, cowbell-avl-2, cowbell-avl-3 (.ogg and .m4a)
+  AVL Drumkits by Glen MacArthur (bandshed.net), Black Pearl kit
+  http://www.bandshed.net/avldrumkits/
+  License: CC BY-SA 3.0, http://creativecommons.org/licenses/by-sa/3.0/
+  These cowbell files are licensed CC BY-SA 3.0.
+  Changes: extracted from Black_Pearl_4_LV2.sf2 (as distributed with
+  https://github.com/x42/avldrums.lv2), trimmed, faded, level-adjusted,
+  re-encoded to Ogg Opus and AAC.
+
+  The AVL Drumkits README:
+
+  AVL-Drumkits
+  ============
+
+  Created by: Glen MacArthur 2015
+  Formats: SFZ, SF2, h2drumkit
+  Website: http://www.bandshed.net/avldrumkits/
+  Contact: info@bandshed.net
+
+  License
+  =======
+
+  CC-BY-SA with the following exception:
+  The by-sa condition is imperative if you modify the samples
+  themselves or create new sample libraries with this licensed product.
+  However, produced music and other non-sample-library works can be
+  licensed freely.
+
+  Attribution means keeping all authors information and this readme-file or
+  its content in the release.
+  If you want to create a fork, a modified version, of this sample library
+  you have to release and distribute it under a different name.
+
+  http://creativecommons.org/licenses/by-sa/3.0/
+
+See CREDITS.md in the source repository for details:
+https://github.com/justinmcbride/drum-notation/blob/main/CREDITS.md
