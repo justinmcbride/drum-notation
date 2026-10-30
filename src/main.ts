@@ -6,6 +6,7 @@ import { stopPlayback } from './ui/playback';
 import { staffView } from './views/staff';
 import { rhythmView } from './views/rhythm';
 import { hitsView } from './views/hits';
+import { timeView } from './views/time';
 import { groovesView } from './views/grooves';
 import { quizView } from './views/quiz';
 
@@ -16,6 +17,7 @@ const ROUTES: Record<string, View> = {
   staff: staffView,
   rhythm: rhythmView,
   hits: hitsView,
+  time: timeView,
   grooves: groovesView,
   quiz: quizView,
 };

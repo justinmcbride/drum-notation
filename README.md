@@ -13,6 +13,7 @@ A mobile-friendly web app for learning to read drum notation. Everything runs in
   - rimshots and cross-stick
   - flams, drags, buzz rolls and single-stroke rolls
   - open, closed and half-open hi-hat; hi-hat foot; ride bell; cymbal chokes
+- **Time:** how to read time signatures (top and bottom numbers, common and cut time, simple and compound meter), with a playable groove in 4/4, 3/4, 2/4, 2/2, 6/8 and 12/8, each with a highlighted count and a metronome that stresses the downbeat. Advanced adds the odd meters 5/4 and 7/8.
 - **Grooves:** classic beats and fills, with tempo control, looping, a metronome, counts, and color-by-drum. The current note is highlighted as it plays.
 - **Quiz:** flash cards for naming drums and markings, with streak tracking. Basic asks only about the standard kit and everyday markings (accent, ghost note, rimshot, cross-stick, open and closed hi-hat); Advanced covers everything.
 

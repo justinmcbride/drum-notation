@@ -3,28 +3,18 @@ import { GROOVES, type Groove } from '../data/grooves';
 import { parseScore } from '../notation/model';
 import { h, playButton } from '../ui/dom';
 import { isActive, playScore, stopPlayback } from '../ui/playback';
+import { getKickRests, kickRestsToggle } from '../ui/prefs';
 import { mountScore, type ScoreView } from '../ui/score-view';
-
-const KICK_RESTS_KEY = 'drum-notation:kick-rests';
-
-function storedFlag(key: string) {
-  try {
-    return localStorage.getItem(key) === '1';
-  } catch {
-    return false;
-  }
-}
 
 const prefs = {
   loop: true,
   metronome: false,
   counts: true,
   colorize: false,
-  kickRests: storedFlag(KICK_RESTS_KEY),
 };
 
-function toggle(label: string, key: keyof typeof prefs, onChange: (v: boolean) => void, extra: Record<string, unknown> = {}) {
-  const btn = h('button', { class: 'toggle', type: 'button', 'aria-pressed': String(prefs[key]), ...extra }, label);
+function toggle(label: string, key: keyof typeof prefs, onChange: (v: boolean) => void) {
+  const btn = h('button', { class: 'toggle', type: 'button', 'aria-pressed': String(prefs[key]) }, label);
   btn.addEventListener('click', () => {
     prefs[key] = !prefs[key];
     btn.setAttribute('aria-pressed', String(prefs[key]));
@@ -45,6 +35,7 @@ function grooveCard(groove: Groove) {
   let view: ScoreView | null = null;
 
   const paper = h('div', { class: 'paper' });
+  const kickRests = kickRestsToggle('kick-rests-note', (v) => view?.update(undefined, { downRests: v }));
 
   const start = () => {
     if (!view) return;
@@ -105,32 +96,16 @@ function grooveCard(groove: Groove) {
       }),
       toggle('Counts', 'counts', (v) => view?.update(undefined, { counts: v })),
       toggle('Color by drum', 'colorize', (v) => view?.update(undefined, { colorize: v })),
-      toggle(
-        'Show kick rests',
-        'kickRests',
-        (v) => {
-          try {
-            localStorage.setItem(KICK_RESTS_KEY, v ? '1' : '0');
-          } catch {
-            // Storage may be unavailable (private mode); the change still applies to this page.
-          }
-          view?.update(undefined, { downRests: v });
-        },
-        { class: 'toggle subtle', 'aria-describedby': 'kick-rests-note' },
-      ),
+      kickRests.btn,
     ),
-    h(
-      'p',
-      { class: 'toggle-note', id: 'kick-rests-note' },
-      'Kick rests are hidden by default: they belong to the feet voice (stems down), not to the hands.',
-    ),
+    kickRests.note,
   );
 
   const mount = () => {
     view = mountScore(paper, score, {
       counts: prefs.counts,
       colorize: prefs.colorize,
-      downRests: prefs.kickRests,
+      downRests: getKickRests(),
       spacePx: 11,
       minScale: 0.95,
     });

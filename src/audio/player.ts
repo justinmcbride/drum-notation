@@ -1,9 +1,11 @@
+import { groupAt, meterOf } from '../notation/meter';
 import type { Score } from '../notation/model';
 import { voiceOf } from '../notation/model';
 import { ensureSamples, scoreSampleKeys } from './samples';
 import { audioContext, click, playHit } from './synth';
 
 export interface PlayerOptions {
+  /** Beats per minute, counted in the meter's beat: quarters in x/4, halves in x/2, dotted quarters in 6/8 and 12/8, eighths in 5/8 or 7/8. */
   bpm: number;
   loop: boolean;
   metronome: boolean;
@@ -31,8 +33,12 @@ export class Player {
     public opts: PlayerOptions,
   ) {}
 
+  private get meter() {
+    return meterOf(this.score);
+  }
+
   private get sixteenth() {
-    return 60 / this.opts.bpm / 4;
+    return 60 / this.opts.bpm / this.meter.tempoSlots;
   }
 
   start() {
@@ -79,9 +85,10 @@ export class Player {
     if (notify && wasPlaying) this.opts.onStop?.();
   }
 
-  /** Written length of a note in seconds: until the next onset in its voice, within the beat (used for rolls). */
+  /** Written length of a note in seconds: until the next onset in its voice, within the beat group (used for rolls). */
   private noteLength(m: number, slot: number, voice: 'up' | 'down') {
-    const beatEnd = (Math.floor(slot / 4) + 1) * 4;
+    const group = groupAt(this.meter, slot);
+    const beatEnd = group.start + group.len;
     let s = slot + 1;
     while (s < beatEnd && !this.score.measures[m].hits.get(s)?.some((h) => voiceOf(h) === voice)) s++;
     return (s - slot) * this.sixteenth;
@@ -100,7 +107,8 @@ export class Player {
           sixteenthSec: this.sixteenth,
         });
       }
-      if (this.opts.metronome && this.slot % 4 === 0) click(t, this.slot === 0);
+      const tick = this.opts.metronome && this.meter.clicks.get(this.slot);
+      if (tick) click(t, tick);
       this.visual.push({ time: t, m: this.measure, s: this.slot });
       this.nextTime += this.sixteenth;
       this.slot++;

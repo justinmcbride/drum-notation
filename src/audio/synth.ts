@@ -1,3 +1,4 @@
+import type { ClickLevel } from '../notation/meter';
 import type { Hit } from '../notation/model';
 import { HAT_RINGING, chokeKeyFor, chokeSamples, initSamples, playSample, sampleKeyFor } from './samples';
 
@@ -197,9 +198,17 @@ function cowbell(t: number, v: number) {
   sum.connect(filter('bandpass', 900, 2)).connect(envelope(t, v * 0.9, 0.3)).connect(out);
 }
 
-export function click(t: number, strong: boolean) {
+const CLICKS: Record<ClickLevel, [freq: number, gain: number]> = {
+  downbeat: [1760, 0.35],
+  group: [1568, 0.28],
+  beat: [1320, 0.2],
+};
+
+/** Metronome click: the downbeat is highest, other beat-group starts a little higher than plain beats. */
+export function click(t: number, level: ClickLevel) {
   audioContext();
-  osc('sine', t, 0.05, strong ? 1760 : 1320).connect(envelope(t, strong ? 0.35 : 0.2, 0.04)).connect(out);
+  const [freq, gain] = CLICKS[level];
+  osc('sine', t, 0.05, freq).connect(envelope(t, gain, 0.04)).connect(out);
 }
 
 /** Synthesized voices: used until a sample has loaded, or if it can't be loaded. */

@@ -1153,6 +1153,21 @@ input[type='range'] {
   }
 }
 
+/* Six labelled tabs don't fit beside the brand on narrow tablets; drop the icons. */
+@media (min-width: 761px) and (max-width: 900px) {
+  .tabs {
+    gap: 2px;
+  }
+
+  .tabs a {
+    padding: 8px 12px;
+  }
+
+  .tabs svg {
+    display: none;
+  }
+}
+
 /* ---------- Mobile ---------- */
 
 @media (max-width: 760px) {
@@ -1280,4 +1295,90 @@ input[type='range'] {
   margin: 8px 0 0;
   font-size: 12.5px;
   color: var(--muted);
+}
+
+/* ---------- Time signatures page ---------- */
+
+/* Stretch a short row of explainers across the page instead of leaving empty columns. */
+.explainers.fit {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr));
+}
+
+.explainer .art.ts-art {
+  gap: 26px;
+}
+
+.ts-stack {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+}
+
+.badge.ts-badge {
+  height: 52px;
+  min-width: 44px;
+}
+
+.meter-title {
+  flex: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}
+
+.meter-card .card-head {
+  align-items: center;
+}
+
+.count-line {
+  font-size: 14px;
+}
+
+.count-line strong {
+  color: var(--text);
+  font-family: var(--serif);
+  font-style: italic;
+  letter-spacing: 0.04em;
+  word-spacing: 0.2em;
+}
+
+.meter-group {
+  margin-top: 28px;
+}
+
+.meter-group > h3 {
+  margin-bottom: 2px;
+}
+
+.meter-group > p {
+  margin: 0 0 14px;
+  color: var(--muted);
+}
+
+.level-hint {
+  margin: 12px 0 0;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.tempo output {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.beat-note {
+  display: inline-flex;
+  align-items: flex-end;
+}
+
+/* Augmentation dot for a dotted beat note, level with the notehead. */
+.beat-note .aug-dot {
+  width: 3.5px;
+  height: 3.5px;
+  margin: 0 0 3px 2px;
+  border-radius: 50%;
+  background: currentColor;
 }

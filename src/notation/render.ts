@@ -1,5 +1,6 @@
 import { ENGRAVING, GLYPH, HEADS, TIME_DIGIT_ADVANCE, timeSigDigit } from './glyphs';
 import { INSTRUMENTS, type Voice } from './instruments';
+import { meterOf, type Meter } from './meter';
 import { headOf, voiceOf, type Hit, type Measure, type Score } from './model';
 
 /** One staff space in SVG user units. */
@@ -47,6 +48,8 @@ interface NoteItem {
   dur: number;
   hits: Hit[];
   voice: Voice;
+  /** Index of the meter group the note sits in. */
+  group: number;
   // Filled during drawing
   stemX?: number;
   stemStartY?: number;
@@ -134,44 +137,75 @@ const r = (n: number) => Math.round(n * 100) / 100;
 
 const gapWidth = (gap: number) => S * (2.7 + 1.15 * Math.log2(gap));
 
-function notateVoice(hits: Map<number, Hit[]>, beats: number, voice: Voice): VoiceNotation {
+const NOTE_VALUES = [6, 4, 3, 2, 1];
+const REST_VALUES = [6, 4, 2, 1];
+const isDotted = (dur: number) => dur === 3 || dur === 6;
+
+/**
+ * Notates one voice of a measure group by group, so no note or rest crosses a beat group.
+ * Rests are split so each starts on a multiple of its own length within the group, which
+ * shows where the beat falls (e.g. two eighth rests rather than a quarter on the 2nd eighth of 6/8).
+ */
+function notateVoice(hits: Map<number, Hit[]>, meter: Meter, voice: Voice): VoiceNotation {
   const notes: NoteItem[] = [];
   const rests: RestItem[] = [];
   const groups: NoteItem[][] = [];
   if (hits.size === 0) {
-    rests.push({ slot: 0, dur: beats * 4, voice, measureRest: true });
+    rests.push({ slot: 0, dur: meter.slots, voice, measureRest: true });
     return { notes, rests, groups };
   }
-  const onsetsIn = (b: number) =>
-    [...hits.keys()].filter((s) => s >= b * 4 && s < b * 4 + 4).sort((a, b2) => a - b2);
-  for (let b = 0; b < beats; b++) {
-    const onsets = onsetsIn(b);
-    const start = b * 4;
-    if (onsets.length === 0) {
-      if (beats === 4 && b % 2 === 0 && onsetsIn(b + 1).length === 0) {
-        rests.push({ slot: start, dur: 8, voice });
-        b++;
+  const onsets = [...hits.keys()].sort((a, b) => a - b);
+  const onsetsIn = (g: { start: number; len: number } | undefined) =>
+    g ? onsets.filter((s) => s >= g.start && s < g.start + g.len) : [];
+  const fillRests = (groupStart: number, slot: number, len: number) => {
+    while (len > 0) {
+      const off = slot - groupStart;
+      const dur = REST_VALUES.find((d) => d <= len && off % d === 0)!;
+      rests.push({ slot, dur, voice });
+      slot += dur;
+      len -= dur;
+    }
+  };
+  for (let gi = 0; gi < meter.groups.length; gi++) {
+    const g = meter.groups[gi];
+    const inGroup = onsetsIn(g);
+    if (inGroup.length === 0) {
+      const next = meter.groups[gi + 1];
+      if (meter.halfRests && g.len === 4 && g.start % 8 === 0 && next?.len === 4 && onsetsIn(next).length === 0) {
+        rests.push({ slot: g.start, dur: 8, voice });
+        gi++;
       } else {
-        rests.push({ slot: start, dur: 4, voice });
+        fillRests(g.start, g.start, g.len);
       }
       continue;
     }
-    const lead = onsets[0] - start;
-    if (lead === 1) rests.push({ slot: start, dur: 1, voice });
-    if (lead === 2) rests.push({ slot: start, dur: 2, voice });
-    if (lead === 3) {
-      rests.push({ slot: start, dur: 2, voice });
-      rests.push({ slot: start + 2, dur: 1, voice });
-    }
-    const beatNotes = onsets.map((slot, i) => ({
-      slot,
-      dur: (onsets[i + 1] ?? start + 4) - slot,
-      hits: hits.get(slot)!,
-      voice,
-    }));
-    notes.push(...beatNotes);
-    if (beatNotes.length > 1) groups.push(beatNotes);
+    fillRests(g.start, g.start, inGroup[0] - g.start);
+    inGroup.forEach((slot, i) => {
+      const gap = (inGroup[i + 1] ?? g.start + g.len) - slot;
+      const dur = NOTE_VALUES.find((d) => d <= gap)!;
+      notes.push({ slot, dur, hits: hits.get(slot)!, voice, group: gi });
+      fillRests(g.start, slot + dur, gap - dur);
+    });
   }
+  rests.sort((a, b) => a.slot - b.slot);
+
+  // Beam runs of flagged notes that follow each other without a rest, within a beam span.
+  const spanOf = (slot: number) => meter.beamSpans.findIndex((b) => slot >= b.start && slot < b.start + b.len);
+  let run: NoteItem[] = [];
+  const flush = () => {
+    if (run.length > 1) groups.push(run);
+    run = [];
+  };
+  for (const n of notes) {
+    const prev = run[run.length - 1];
+    if (n.dur >= 4) {
+      flush();
+      continue;
+    }
+    if (prev && (prev.slot + prev.dur !== n.slot || spanOf(prev.slot) !== spanOf(n.slot))) flush();
+    run.push(n);
+  }
+  flush();
   return { notes, rests, groups };
 }
 
@@ -215,11 +249,12 @@ function layoutMeasures(score: Score, opts: Required<Omit<RenderOptions, 'labels
     up: split.some((v) => v.up.size > 0),
     down: split.some((v) => v.down.size > 0),
   };
+  const meter = meterOf(score);
   return score.measures.map((measure, index) => {
     const { up, down } = split[index];
     const voices: Partial<Record<Voice, VoiceNotation>> = {};
-    if (hasVoice.up) voices.up = notateVoice(up, score.beats, 'up');
-    if (hasVoice.down) voices.down = notateVoice(down, score.beats, 'down');
+    if (hasVoice.up) voices.up = notateVoice(up, meter, 'up');
+    if (hasVoice.down) voices.down = notateVoice(down, meter, 'down');
 
     const colSlots = new Set<number>();
     for (const voice of ['up', 'down'] as Voice[]) {
@@ -237,7 +272,9 @@ function layoutMeasures(score: Score, opts: Required<Omit<RenderOptions, 'labels
       if (mods.has('drag')) leftExtra += 3.0 * S;
       else if (mods.has('flam')) leftExtra += 1.9 * S;
       const allNotes = Object.values(voices).flatMap((v) => v.notes.filter((n) => n.slot === slot));
-      const dotted = allNotes.some((n) => n.dur === 3);
+      const dotted =
+        allNotes.some((n) => isDotted(n.dur)) ||
+        (['up', 'down'] as Voice[]).some((v) => visibleRests(voices, v, opts).some((x) => x.slot === slot && isDotted(x.dur)));
       let rightExtra = 0;
       if (mods.has('ghost')) rightExtra = Math.max(rightExtra, 0.5 * S);
       if (dotted) rightExtra = Math.max(rightExtra, 0.8 * S);
@@ -494,6 +531,9 @@ function drawMeasure(
           const contentStart = mx + m.leftPad;
           rx = (contentStart + end - m.rightPad) / 2 - (w * S) / 2;
         } else {
+          if (rest.dur === 6) {
+            glyph(colGroup(rest.slot), GLYPH.augmentationDot, colX(rest.slot) + 1.18 * S + 0.3 * S, yOf(5 + off));
+          }
           if (rest.dur === 8) {
             ch = GLYPH.restHalf;
             w = 1.128;
@@ -545,7 +585,7 @@ function drawMeasure(
     // Dots, rolls, chokes
     for (const note of vn.notes) {
       const cg = colGroup(note.slot);
-      if (note.dur === 3) {
+      if (isDotted(note.dur)) {
         for (const h of note.hits) {
           const pos = INSTRUMENTS[h.inst].pos;
           const dotPos = pos % 2 === 0 ? pos + 1 : pos;
@@ -744,7 +784,7 @@ function drawBeamGroup(
   const [s1, s2] = level(1);
   const covered = new Set<number>();
   for (let i = 0; i < group.length - 1; i++) {
-    if (group[i].dur === 1 && group[i + 1].dur === 1) {
+    if (group[i].dur === 1 && group[i + 1].dur === 1 && group[i].group === group[i + 1].group) {
       rect(parent, group[i].stemX! - half, s1, group[i + 1].stemX! + half, s2, 'ink beam');
       covered.add(i).add(i + 1);
     }
@@ -760,10 +800,9 @@ function drawBeamGroup(
   bounds.add(beamY);
 }
 
-const COUNT_SYLLABLES = ['', 'e', '&', 'a'];
-
 function drawCounts(sys: SVGGElement, m: MeasureLayout, score: Score, y: number, counts: Map<string, SVGTextElement>) {
-  const step = 4 / m.resolution;
+  const meter = meterOf(score);
+  const step = Math.min(4 / m.resolution, meter.maxCountStep);
   const cols = m.columns;
   const xAt = (slot: number) => {
     const exact = cols.find((c) => c.slot === slot);
@@ -779,20 +818,20 @@ function drawCounts(sys: SVGGElement, m: MeasureLayout, score: Score, y: number,
   };
   if (!cols.length) return;
   for (let slot = 0; slot < score.slots; slot += step) {
-    const sub = slot % 4;
-    const text = sub === 0 ? String(slot / 4 + 1) : COUNT_SYLLABLES[sub];
+    const count = meter.count(slot);
+    if (!count) continue;
     const onset = m.measure.hits.has(slot);
     const t = el(
       'text',
       {
         x: r(xAt(slot)),
         y: r(y),
-        class: `count${sub === 0 ? ' beat' : ''}${onset ? ' onset' : ''}`,
+        class: `count${count.beat ? ' beat' : ''}${onset ? ' onset' : ''}`,
         'text-anchor': 'middle',
       },
       sys,
     );
-    t.textContent = text;
+    t.textContent = count.text;
     counts.set(`${m.index}:${slot}`, t);
   }
 }
