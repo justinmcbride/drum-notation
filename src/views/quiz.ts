@@ -150,7 +150,14 @@ export function quizView(root: HTMLElement) {
     question = mode === 'drums' ? drumQuestion(level, question?.answer) : hitQuestion(level, question?.answer);
     answered = false;
     view?.destroy();
-    view = mountScore(paper, question.score, { timeSig: false, rests: false, barlines: false, spacePx: 16 });
+    view = mountScore(paper, question.score, {
+      timeSig: false,
+      rests: false,
+      barlines: false,
+      // Each drum has its own color, so colored notes would give the answer away.
+      colorize: false,
+      spacePx: 16,
+    });
     prompt.textContent = question.prompt;
     feedback.replaceChildren(h('span', {}, 'Choose an answer. Not sure? Press “Hear it” for a clue.'));
     answers.replaceChildren(

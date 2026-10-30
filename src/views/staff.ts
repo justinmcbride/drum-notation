@@ -7,6 +7,7 @@ import { glyphIcon, h, ICONS, playButton } from '../ui/dom';
 import { isActive, playScore, stopPlayback } from '../ui/playback';
 import { mountScore } from '../ui/score-view';
 import { getLevel, instrumentsFor, levelToggle, onLevelChange } from '../ui/level';
+import { colorNotesToggle } from '../ui/prefs';
 import type { Player } from '../audio/player';
 
 function keyScore(insts: Inst[]): Score {
@@ -34,7 +35,7 @@ export function staffView(root: HTMLElement) {
     shown = inst;
     if (!inst) {
       info.replaceChildren(
-        h('div', { class: 'swatch', style: { background: 'var(--paper)' } }, glyphIcon('\uE0A4', 16)),
+        h('div', { class: 'swatch' }, glyphIcon('\uE0A4', 16)),
         h(
           'div',
           {},
@@ -46,7 +47,7 @@ export function staffView(root: HTMLElement) {
     }
     const d = INSTRUMENTS[inst];
     info.replaceChildren(
-      h('div', { class: 'swatch', style: { background: d.color } }, glyphIcon(HEADS[d.head].glyph, 16)),
+      h('div', { class: 'swatch', style: `--c:${d.color}` }, glyphIcon(HEADS[d.head].glyph, 16)),
       h(
         'div',
         {},
@@ -62,7 +63,7 @@ export function staffView(root: HTMLElement) {
   const view = mountScore(
     paper,
     keyScore(insts),
-    { timeSig: false, rests: false, barlines: false, colorize: true, labels: keyLabels(insts), hitAreas: true, spacePx: 12 },
+    { timeSig: false, rests: false, barlines: false, labels: keyLabels(insts), hitAreas: true, spacePx: 12 },
     () => (selected = null),
   );
   paper.addEventListener('click', (e) => {
@@ -78,7 +79,7 @@ export function staffView(root: HTMLElement) {
     showInfo(inst);
   });
 
-  const legend = h('div', { class: 'legend' });
+  const legend = h('div', { class: 'legend color-only' });
   const fillLegend = () =>
     legend.replaceChildren(
       ...insts.map((id) => h('span', {}, h('i', { style: { background: INSTRUMENTS[id].color } }), INSTRUMENTS[id].short)),
@@ -150,19 +151,25 @@ export function staffView(root: HTMLElement) {
     if (isActive(player)) return stopPlayback();
     player = playScore(rockScore, rockView, { bpm: rock.bpm, loop: true, onStateChange: set });
   });
-  const rockView = mountScore(rockPaper, rockScore, { colorize: true, counts: true, spacePx: 11 });
+  const rockView = mountScore(rockPaper, rockScore, { counts: true, spacePx: 11 });
 
   keyCard.append(
     h('div', { class: 'card-head' }, h('h2', {}, 'The drum key'), levelToggle()),
     h(
       'p',
       {},
-      'Low drums sit low on the staff, cymbals sit on top. Notes are colored by instrument. ',
+      'Low drums sit low on the staff, cymbals sit on top. ',
+      h('span', { class: 'color-only' }, 'Notes are colored by instrument. '),
       h('span', { class: 'basic-only' }, 'Basic shows a standard kit; switch to Advanced for the hi-hat pedal, ride bell, china and cowbell.'),
       h('span', { class: 'advanced-only' }, 'Advanced adds the hi-hat pedal, ride bell, china and cowbell to the standard kit.'),
     ),
     paper,
-    h('div', { class: 'key-hint', html: `${ICONS.speaker.replace('<svg', '<svg width="18" height="18"')} Tap a note to play it` }),
+    h(
+      'div',
+      { class: 'key-tools' },
+      h('div', { class: 'key-hint', html: `${ICONS.speaker.replace('<svg', '<svg width="18" height="18"')} Tap a note to play it` }),
+      colorNotesToggle(),
+    ),
     legend,
     info,
   );

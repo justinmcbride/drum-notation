@@ -3,14 +3,13 @@ import { GROOVES, type Groove } from '../data/grooves';
 import { parseScore } from '../notation/model';
 import { h, playButton } from '../ui/dom';
 import { isActive, playScore, stopPlayback } from '../ui/playback';
-import { getKickRests, kickRestsToggle } from '../ui/prefs';
+import { colorNotesToggle, getKickRests, kickRestsToggle } from '../ui/prefs';
 import { mountScore, type ScoreView } from '../ui/score-view';
 
 const prefs = {
   loop: true,
   metronome: false,
   counts: true,
-  colorize: false,
 };
 
 function toggle(label: string, key: keyof typeof prefs, onChange: (v: boolean) => void) {
@@ -95,7 +94,7 @@ function grooveCard(groove: Groove) {
         if (player) player.opts.metronome = v;
       }),
       toggle('Counts', 'counts', (v) => view?.update(undefined, { counts: v })),
-      toggle('Color by drum', 'colorize', (v) => view?.update(undefined, { colorize: v })),
+      colorNotesToggle(),
       kickRests.btn,
     ),
     kickRests.note,
@@ -104,7 +103,6 @@ function grooveCard(groove: Groove) {
   const mount = () => {
     view = mountScore(paper, score, {
       counts: prefs.counts,
-      colorize: prefs.colorize,
       downRests: getKickRests(),
       spacePx: 11,
       minScale: 0.95,

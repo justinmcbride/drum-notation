@@ -20,6 +20,10 @@ export interface RenderOptions {
    */
   downRests?: boolean;
   barlines?: boolean;
+  /**
+   * Tag noteheads with their instrument color. The color only shows while the app-wide
+   * "Color notes" setting is on (<html class="color-notes">). Default true.
+   */
   colorize?: boolean;
   counts?: boolean;
   /** Text labels under the staff keyed by "measure:slot". */
@@ -320,7 +324,7 @@ export function renderScore(score: Score, options: RenderOptions): RenderResult 
     rests: true,
     downRests: true,
     barlines: true,
-    colorize: false,
+    colorize: true,
     counts: false,
     hitAreas: false,
     ...options,
@@ -482,12 +486,16 @@ function drawMeasure(
     return cg;
   };
 
-  if (opts.hitAreas) {
+  if (opts.hitAreas || opts.colorize) {
     for (const c of m.columns) {
       const cg = colGroup(c.slot);
-      const insts = (m.measure.hits.get(c.slot) ?? []).map((h) => h.inst).join(' ');
-      cg.setAttribute('data-inst', insts);
-      rect(cg, c.x - 1.4 * S, -6 * S, c.x + 2.6 * S, 10 * S, 'hit-area');
+      if (opts.hitAreas) {
+        const insts = (m.measure.hits.get(c.slot) ?? []).map((h) => h.inst).join(' ');
+        cg.setAttribute('data-inst', insts);
+      }
+      // With colored notes the highlight color alone can match a drum's color, so a faint
+      // band behind the column marks the current note too (styled only in color mode).
+      rect(cg, c.x - 1.4 * S, -6 * S, c.x + 2.6 * S, 10 * S, opts.hitAreas ? 'hit-area' : 'col-band');
     }
   }
 

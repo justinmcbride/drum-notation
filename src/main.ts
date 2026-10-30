@@ -2,6 +2,7 @@ import './styles.css';
 import { prefetchSamples } from './audio/samples';
 import { gitHubLink } from './ui/github-link';
 import { applyLevel } from './ui/level';
+import { applyColorNotes, bindColorNotesButton } from './ui/prefs';
 import { stopPlayback } from './ui/playback';
 import { staffView } from './views/staff';
 import { rhythmView } from './views/rhythm';
@@ -23,6 +24,8 @@ const ROUTES: Record<string, View> = {
 };
 
 applyLevel();
+applyColorNotes();
+bindColorNotesButton(document.getElementById('color-notes') as HTMLButtonElement, true);
 const root = document.getElementById('view')!;
 document.body.append(gitHubLink());
 let currentRoute = '';

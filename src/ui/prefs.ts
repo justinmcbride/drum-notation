@@ -49,3 +49,53 @@ export function kickRestsToggle(noteId: string, onChange: (on: boolean) => void)
   );
   return { btn, note };
 }
+
+const COLOR_NOTES_KEY = 'drum-notation:color-notes';
+const COLOR_NOTES_EVENT = 'drum-notation:color-notes-change';
+
+/** Whether noteheads are colored by instrument. Off by default; applies app-wide. */
+export function getColorNotes() {
+  try {
+    return localStorage.getItem(COLOR_NOTES_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+/** Mirrors the setting onto <html class="color-notes"> so CSS colors every score at once. */
+export function applyColorNotes(on = getColorNotes()) {
+  document.documentElement.classList.toggle('color-notes', on);
+}
+
+export function setColorNotes(on: boolean) {
+  try {
+    localStorage.setItem(COLOR_NOTES_KEY, on ? '1' : '0');
+  } catch {
+    // Storage may be unavailable (private mode); the change still applies to this page.
+  }
+  applyColorNotes(on);
+  window.dispatchEvent(new CustomEvent<boolean>(COLOR_NOTES_EVENT, { detail: on }));
+}
+
+/**
+ * Keeps a button's aria-pressed in sync with the Color notes setting and flips the setting on
+ * click. Listening stops once the button leaves the document, unless `persistent` is set.
+ */
+export function bindColorNotesButton(btn: HTMLButtonElement, persistent = false) {
+  btn.setAttribute('aria-pressed', String(getColorNotes()));
+  btn.addEventListener('click', () => setColorNotes(!getColorNotes()));
+  const handler = (e: Event) => {
+    if (!persistent && !btn.isConnected) {
+      window.removeEventListener(COLOR_NOTES_EVENT, handler);
+      return;
+    }
+    btn.setAttribute('aria-pressed', String((e as CustomEvent<boolean>).detail));
+  };
+  window.addEventListener(COLOR_NOTES_EVENT, handler);
+  return btn;
+}
+
+/** In-page "Color notes" toggle bound to the app-wide setting. */
+export function colorNotesToggle() {
+  return bindColorNotesButton(h('button', { class: 'toggle', type: 'button' }, 'Color notes'));
+}

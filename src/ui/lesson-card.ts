@@ -8,7 +8,6 @@ import type { Player } from '../audio/player';
 export interface LessonCardOptions {
   counts?: boolean;
   metronome?: boolean;
-  colorize?: boolean;
 }
 
 export function lessonCard(lesson: Lesson, options: LessonCardOptions = {}) {
@@ -47,7 +46,6 @@ export function lessonCard(lesson: Lesson, options: LessonCardOptions = {}) {
 
   const view = mountScore(paper, score, {
     counts: options.counts,
-    colorize: options.colorize,
     clef: true,
     timeSig: true,
   });
