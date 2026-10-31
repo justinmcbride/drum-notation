@@ -26,6 +26,11 @@ export class Player {
   private visual: { time: number; m: number; s: number }[] = [];
   private endTime: number | null = null;
   private run = 0;
+  /** Where the next (re)start begins. */
+  private from = { m: 0, s: 0 };
+  /** True once samples are ready and the scheduler may run. */
+  private ready = false;
+  private held = false;
   playing = false;
 
   constructor(
@@ -41,22 +46,61 @@ export class Player {
     return 60 / this.opts.bpm / this.meter.tempoSlots;
   }
 
-  start() {
+  /** Starts playing from `from` (measure and slot), or from the top. */
+  start(from = { m: 0, s: 0 }) {
     const ac = audioContext();
     this.stop(false);
     this.playing = true;
+    this.from = this.clamp(from);
     const run = this.run;
     // Give the recorded samples a moment to load; anything still missing plays synthesized.
     void ensureSamples(scoreSampleKeys(this.score)).then(() => {
-      if (this.playing && run === this.run) this.begin(ac);
+      if (!this.playing || run !== this.run) return;
+      this.ready = true;
+      if (!this.held) this.begin(ac, 0.12);
     });
   }
 
-  private begin(ac: AudioContext) {
-    this.measure = 0;
-    this.slot = 0;
+  /** Pauses the scheduler (while scrubbing) without leaving the playing state. */
+  hold() {
+    if (!this.playing) return;
+    this.held = true;
+    this.halt();
+  }
+
+  /** Moves playback to a measure and slot. Resumes from there if playing and not held. */
+  seek(m: number, s: number) {
+    this.from = this.clamp({ m, s });
+    if (this.playing && this.ready && !this.held) {
+      this.halt();
+      this.begin(audioContext(), 0.03);
+    }
+  }
+
+  /** Ends a hold, continuing from the last seek. */
+  release() {
+    if (!this.held) return;
+    this.held = false;
+    if (this.playing && this.ready) this.begin(audioContext(), 0.03);
+  }
+
+  private clamp({ m, s }: { m: number; s: number }) {
+    const mm = Math.max(0, Math.min(this.score.measures.length - 1, m));
+    return { m: mm, s: Math.max(0, Math.min(this.score.slots - 1, s)) };
+  }
+
+  private halt() {
+    if (this.timer !== null) clearInterval(this.timer);
+    cancelAnimationFrame(this.raf);
+    this.timer = null;
+    this.visual = [];
+  }
+
+  private begin(ac: AudioContext, delay: number) {
+    this.measure = this.from.m;
+    this.slot = this.from.s;
     this.endTime = null;
-    this.nextTime = ac.currentTime + 0.12;
+    this.nextTime = ac.currentTime + delay;
     this.timer = window.setInterval(() => this.schedule(), TICK_MS);
     this.schedule();
     const frame = () => {
@@ -77,11 +121,10 @@ export class Player {
   stop(notify = true) {
     const wasPlaying = this.playing;
     this.run++;
-    if (this.timer !== null) clearInterval(this.timer);
-    cancelAnimationFrame(this.raf);
-    this.timer = null;
-    this.visual = [];
+    this.halt();
     this.playing = false;
+    this.ready = false;
+    this.held = false;
     if (notify && wasPlaying) this.opts.onStop?.();
   }
 
@@ -125,4 +168,13 @@ export class Player {
       }
     }
   }
+}
+
+/** Sounds the hits at one slot right away (used while scrubbing). */
+export function auditionSlot(score: Score, m: number, s: number) {
+  const hits = score.measures[m]?.hits.get(s);
+  if (!hits?.length) return;
+  const t = audioContext().currentTime + 0.01;
+  void ensureSamples(scoreSampleKeys(score), 0);
+  for (const hit of hits) playHit(hit, t, { noteSec: 0.3, sixteenthSec: 0.1 });
 }

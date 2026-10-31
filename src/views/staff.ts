@@ -151,7 +151,7 @@ export function staffView(root: HTMLElement) {
     if (isActive(player)) return stopPlayback();
     player = playScore(rockScore, rockView, { bpm: rock.bpm, loop: true, onStateChange: set });
   });
-  const rockView = mountScore(rockPaper, rockScore, { counts: true, spacePx: 11 });
+  const rockView = mountScore(rockPaper, rockScore, { counts: true, spacePx: 11, scrub: true });
 
   keyCard.append(
     h('div', { class: 'card-head' }, h('h2', {}, 'The drum key'), levelToggle()),

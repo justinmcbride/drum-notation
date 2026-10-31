@@ -124,7 +124,7 @@ function exampleCard(ex: MeterExample, views: Set<ScoreView>) {
   );
 
   const mount = () => {
-    view = mountScore(paper, score, { counts: true, downRests: getKickRests(), spacePx: 11, minScale: 0.6 });
+    view = mountScore(paper, score, { counts: true, downRests: getKickRests(), spacePx: 11, minScale: 0.6, scrub: true });
     views.add(view);
   };
   return { card, mount, playing: () => isActive(player) };

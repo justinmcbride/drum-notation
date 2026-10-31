@@ -106,6 +106,7 @@ function grooveCard(groove: Groove) {
       downRests: getKickRests(),
       spacePx: 11,
       minScale: 0.95,
+      scrub: true,
     });
   };
   const destroy = () => view?.destroy();

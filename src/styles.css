@@ -602,6 +602,35 @@ h3 {
   min-height: 40px;
 }
 
+.score-host.scrub {
+  /* Vertical swipes still scroll the page; sideways drags scrub. */
+  touch-action: pan-y;
+  cursor: col-resize;
+  border-radius: 6px;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.score-host.scrub:focus {
+  outline: none;
+}
+
+.score-host.scrub:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+}
+
+.score .playhead {
+  fill: var(--hl);
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.score-host.scrubbing .playhead {
+  opacity: 0.85;
+}
+
 .score-host.scrolls {
   overflow-x: auto;
   overscroll-behavior-x: contain;

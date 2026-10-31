@@ -43,8 +43,21 @@ export interface RenderResult {
   columns: Map<string, SVGGElement>;
   /** Count labels keyed by "measure:slot". */
   counts: Map<string, SVGTextElement>;
+  /** Where every grid slot sits, line by line, for mapping pointer positions to playback time. */
+  timeline: TimelineSystem[];
   width: number;
   height: number;
+}
+
+/** One line of music in SVG user units. */
+export interface TimelineSystem {
+  /** Vertical extent of the whole line, including counts and labels. */
+  top: number;
+  bottom: number;
+  /** Vertical extent of a playhead drawn over the staff. */
+  staffTop: number;
+  staffBottom: number;
+  measures: { index: number; slotX: number[] }[];
 }
 
 interface NoteItem {
@@ -370,6 +383,7 @@ export function renderScore(score: Score, options: RenderOptions): RenderResult 
   svg.setAttribute('font-size', String(FONT_SIZE));
   const columns = new Map<string, SVGGElement>();
   const counts = new Map<string, SVGTextElement>();
+  const timeline: TimelineSystem[] = [];
 
   let totalWidth = opts.width;
   let cursorY = 0;
@@ -414,9 +428,11 @@ export function renderScore(score: Score, options: RenderOptions): RenderResult 
     }
 
     let mx = header;
+    const timed: TimelineSystem['measures'] = [];
     for (const m of line) {
       const width = m.fixed + m.flex * k;
       drawMeasure(sys, m, mx, width, k, opts, bounds, columns);
+      timed.push({ index: m.index, slotX: slotPositions(m, mx + m.leftPad, score.slots) });
       mx += width;
     }
 
@@ -445,12 +461,37 @@ export function renderScore(score: Score, options: RenderOptions): RenderResult 
     if (li === 0) firstMinY = top;
     const offset = li === 0 ? 0 : cursorY - top;
     sys.setAttribute('transform', `translate(0 ${r(offset)})`);
+    timeline.push({
+      top: offset + top,
+      bottom: offset + bottom,
+      staffTop: offset + Math.min(bounds.min, STAFF_TOP - 1.5 * S),
+      staffBottom: offset + Math.max(Math.min(bounds.max, STAFF_BOTTOM + 3 * S), STAFF_BOTTOM + 1.5 * S),
+      measures: timed,
+    });
     cursorY = offset + bottom + 1.5 * S;
   });
 
   const height = cursorY - 1.5 * S - firstMinY;
   svg.setAttribute('viewBox', `0 ${r(firstMinY)} ${r(totalWidth)} ${r(height)}`);
-  return { svg, columns, counts, width: totalWidth, height };
+  return { svg, columns, counts, timeline, width: totalWidth, height };
+}
+
+/**
+ * The x of every grid slot in a measure (at the middle of a notehead). Slots with a note or
+ * rest use its column; slots in between are spaced evenly between their neighbors.
+ */
+function slotPositions(m: MeasureLayout, startX: number, slots: number) {
+  const mid = 0.59 * S;
+  const anchors = m.columns.map((c) => ({ slot: c.slot, x: c.x + mid }));
+  if (!anchors.length || anchors[0].slot > 0) anchors.unshift({ slot: 0, x: startX + mid });
+  anchors.push({ slot: slots, x: Math.max((m.contentEnd ?? startX) + mid, anchors[anchors.length - 1].x) });
+  const xs: number[] = [];
+  for (let i = 0; i < anchors.length - 1; i++) {
+    const a = anchors[i];
+    const b = anchors[i + 1];
+    for (let s = a.slot; s < b.slot; s++) xs.push(a.x + ((b.x - a.x) * (s - a.slot)) / (b.slot - a.slot));
+  }
+  return xs;
 }
 
 function drawMeasure(

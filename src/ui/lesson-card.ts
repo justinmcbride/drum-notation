@@ -48,6 +48,7 @@ export function lessonCard(lesson: Lesson, options: LessonCardOptions = {}) {
     counts: options.counts,
     clef: true,
     timeSig: true,
+    scrub: true,
   });
 
   return card;

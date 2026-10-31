@@ -15,6 +15,7 @@ A mobile-friendly web app for learning to read drum notation. Everything runs in
   - open, closed and half-open hi-hat; hi-hat foot; ride bell; cymbal chokes
 - **Time:** how to read time signatures (top and bottom numbers, common and cut time, simple and compound meter), with a playable groove in 4/4, 3/4, 2/4, 2/2, 6/8 and 12/8, each with a highlighted count and a metronome that stresses the downbeat. Advanced adds the odd meters 5/4 and 7/8.
 - **Grooves:** classic beats and fills, with tempo control, looping, a metronome and counts. The current note is highlighted as it plays.
+- **Scrubbing:** on any playable score, drag sideways (or tap) to move the playback position. A playhead shows where you are and the hits sound as you pass them. Releasing while playing continues from there; when stopped, the next Play starts from that spot (Stop goes back to the top). On a phone, vertical swipes still scroll the page. With the keyboard, focus a score and use the arrow keys to step note by note, Page Up/Down to move by bar, and Home/End.
 - **Color notes:** notes are plain black by default. The palette button in the top bar (also on the Staff key and each groove) colors notes by drum on every page and is remembered between visits. Quiz notes always stay black, since the color would give away the drum.
 - **Quiz:** flash cards for naming drums and markings, with streak tracking. Basic asks only about the standard kit and everyday markings (accent, ghost note, rimshot, cross-stick, open and closed hi-hat); Advanced covers everything.
 

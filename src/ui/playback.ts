@@ -1,6 +1,6 @@
 import { Player } from '../audio/player';
 import type { Score } from '../notation/model';
-import type { ScoreView } from './score-view';
+import type { ScoreView, ScrubHandler } from './score-view';
 
 let active: Player | null = null;
 
@@ -11,22 +11,35 @@ export interface PlaybackOptions {
   onStateChange?: (playing: boolean) => void;
 }
 
-/** Plays a score while highlighting it. Only one score plays at a time. */
+/**
+ * Plays a score while highlighting it. Only one score plays at a time. Playback starts from the
+ * view's cued position (set by scrubbing), follows scrubbing while playing, and stopping returns
+ * the cue to the top.
+ */
 export function playScore(score: Score, view: ScoreView, opts: PlaybackOptions): Player {
   stopPlayback();
+  const scrubber: ScrubHandler = {
+    start: () => player.hold(),
+    end: (p) => {
+      player.seek(p.m, p.s);
+      player.release();
+    },
+  };
   const player = new Player(score, {
     bpm: opts.bpm,
     loop: opts.loop ?? false,
     metronome: opts.metronome ?? false,
     onSlot: (m, s) => view.highlight(m, s),
     onStop: () => {
-      view.clear();
+      if (view.scrubber === scrubber) view.scrubber = null;
+      view.cue(null);
       if (active === player) active = null;
       opts.onStateChange?.(false);
     },
   });
   active = player;
-  player.start();
+  view.scrubber = scrubber;
+  player.start(view.position ?? undefined);
   opts.onStateChange?.(true);
   return player;
 }
