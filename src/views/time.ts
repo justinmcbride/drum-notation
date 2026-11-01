@@ -4,6 +4,7 @@ import { timeSigDigit } from '../notation/glyphs';
 import { parseScore } from '../notation/model';
 import { glyphIcon, h, playButton } from '../ui/dom';
 import { levelToggle, onLevelChange } from '../ui/level';
+import { playAlong } from '../ui/play-along';
 import { isActive, playScore, stopPlayback } from '../ui/playback';
 import { getKickRests, kickRestsToggle } from '../ui/prefs';
 import { mountScore, type ScoreView } from '../ui/score-view';
@@ -83,9 +84,12 @@ function exampleCard(ex: MeterExample, views: Set<ScoreView>) {
     range.value = String(bpm);
     value.textContent = String(bpm);
     if (player) player.opts.bpm = bpm;
+    along?.refresh();
   };
+  let along: ReturnType<typeof playAlong> | null = null;
   range.addEventListener('input', () => setBpm(+range.value));
   setBpm(bpm);
+  along = playAlong({ score, view: () => view, bpm: () => bpm, loop: () => true });
 
   const metronome = h('button', { class: 'toggle', type: 'button', 'aria-pressed': String(prefs.metronome) }, 'Metronome');
   metronome.addEventListener('click', () => {
@@ -120,6 +124,7 @@ function exampleCard(ex: MeterExample, views: Set<ScoreView>) {
         output,
       ),
     ),
+    along.element,
     h('div', { class: 'toggles' }, metronome),
   );
 
@@ -127,7 +132,7 @@ function exampleCard(ex: MeterExample, views: Set<ScoreView>) {
     view = mountScore(paper, score, { counts: true, downRests: getKickRests(), spacePx: 11, minScale: 0.6, scrub: true });
     views.add(view);
   };
-  return { card, mount, playing: () => isActive(player) };
+  return { card, mount, playing: () => isActive(player) || !!along?.active() };
 }
 
 export function timeView(root: HTMLElement) {
@@ -240,7 +245,7 @@ export function timeView(root: HTMLElement) {
         h(
           'div',
           {},
-          h('h2', {}, 'Play along'),
+          h('h2', {}, 'Listen and count'),
           h('p', {}, 'Each example loops. Count out loud with the highlighted numbers; the metronome clicks the beat.'),
         ),
       ),

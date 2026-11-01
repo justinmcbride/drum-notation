@@ -1507,3 +1507,219 @@ input[type='range'] {
   border-radius: 50%;
   background: currentColor;
 }
+
+/* ---------- Play along (microphone) ---------- */
+
+.play-along {
+  margin-top: 14px;
+}
+
+.toggle.play-along-btn::before {
+  display: none;
+}
+
+.play-along-btn .icon {
+  display: inline-flex;
+  width: 18px;
+  height: 18px;
+}
+
+.play-along-btn .icon svg {
+  width: 100%;
+  height: 100%;
+}
+
+.play-along-btn[aria-pressed='true'] {
+  background: rgba(255, 107, 74, 0.14);
+}
+
+.play-along.listening .play-along-btn .icon {
+  color: var(--accent);
+  animation: pa-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes pa-pulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+
+.pa-panel {
+  margin-top: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
+  display: grid;
+  gap: 10px;
+}
+
+.pa-status {
+  margin: 0;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.pa-status.error {
+  color: var(--bad);
+}
+
+.play-along:not(.listening) .pa-readout,
+.play-along:not(.listening) .pa-level {
+  display: none;
+}
+
+.play-along.failed .pa-settings,
+.play-along.failed .pa-help,
+.play-along.failed .pa-tip {
+  display: none;
+}
+
+.pa-label {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.pa-readout {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 20px;
+}
+
+.pa-tempo,
+.pa-next,
+.pa-level {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pa-bpm {
+  min-width: 2.2em;
+  font-size: 26px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  color: var(--text);
+}
+
+.pa-target {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.pa-dots {
+  display: inline-flex;
+  gap: 5px;
+  min-height: 12px;
+}
+
+.pa-dots i {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid var(--muted);
+}
+
+.pa-dots i.on {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+.pa-dots i.roll {
+  width: auto;
+  height: auto;
+  padding: 0 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 700;
+  line-height: 14px;
+  color: var(--muted);
+}
+
+.pa-dots i.roll.on {
+  color: #fff;
+}
+
+.pa-restart {
+  margin-left: auto;
+  min-height: 36px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.pa-meter {
+  flex: 1;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+  transition: outline-color 0.12s;
+}
+
+.pa-meter.hit {
+  outline-color: var(--accent);
+  transition: none;
+}
+
+.pa-meter-fill {
+  display: block;
+  width: 0;
+  height: 100%;
+  background: linear-gradient(90deg, var(--good), var(--accent-2) 75%, var(--accent));
+  transition: width 0.06s linear;
+}
+
+.pa-settings {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  gap: 6px 20px;
+}
+
+.pa-setting {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.pa-setting .pa-label {
+  min-width: 92px;
+}
+
+.pa-setting output {
+  min-width: 48px;
+  text-align: right;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+.pa-help,
+.pa-tip {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+/* While listening, the waiting notes stand out a little more. */
+.score-host.listening .playhead {
+  opacity: 0.8;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .play-along.listening .play-along-btn .icon {
+    animation: none;
+  }
+}

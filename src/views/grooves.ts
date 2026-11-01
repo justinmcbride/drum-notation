@@ -2,6 +2,7 @@ import type { Player } from '../audio/player';
 import { GROOVES, type Groove } from '../data/grooves';
 import { parseScore } from '../notation/model';
 import { h, playButton } from '../ui/dom';
+import { playAlong } from '../ui/play-along';
 import { isActive, playScore, stopPlayback } from '../ui/playback';
 import { colorNotesToggle, getKickRests, kickRestsToggle } from '../ui/prefs';
 import { mountScore, type ScoreView } from '../ui/score-view';
@@ -32,6 +33,7 @@ function grooveCard(groove: Groove) {
   let bpm = groove.bpm;
   let player: Player | null = null;
   let view: ScoreView | null = null;
+  let along: ReturnType<typeof playAlong> | null = null;
 
   const paper = h('div', { class: 'paper' });
   const kickRests = kickRestsToggle('kick-rests-note', (v) => view?.update(undefined, { downRests: v }));
@@ -50,9 +52,11 @@ function grooveCard(groove: Groove) {
     range.value = String(bpm);
     output.innerHTML = `${bpm} <small>bpm</small>`;
     if (player) player.opts.bpm = bpm;
+    along?.refresh();
   };
   range.addEventListener('input', () => setBpm(+range.value));
   setBpm(bpm);
+  along = playAlong({ score, view: () => view, bpm: () => bpm, loop: () => prefs.loop });
 
   const card = h(
     'article',
@@ -84,6 +88,7 @@ function grooveCard(groove: Groove) {
         output,
       ),
     ),
+    along.element,
     h(
       'div',
       { class: 'toggles' },
@@ -109,7 +114,10 @@ function grooveCard(groove: Groove) {
       scrub: true,
     });
   };
-  const destroy = () => view?.destroy();
+  const destroy = () => {
+    along?.destroy();
+    view?.destroy();
+  };
   return { card, paper, mount, destroy };
 }
 

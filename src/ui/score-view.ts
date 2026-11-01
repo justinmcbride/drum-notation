@@ -22,6 +22,8 @@ export interface Position {
 export interface ScrubHandler {
   start(): void;
   end(p: Position): void;
+  /** Don't sound the notes passed over (the microphone is listening). */
+  quiet?: boolean;
 }
 
 export interface ScoreView {
@@ -213,6 +215,7 @@ export function mountScore(
   let lastSound = 0;
   function sound(p: Position) {
     const now = performance.now();
+    if (view.scrubber?.quiet) return;
     if (now - lastSound < 70 || !score.measures[p.m]?.hits.get(p.s)?.length) return;
     lastSound = now;
     auditionSlot(score, p.m, p.s);

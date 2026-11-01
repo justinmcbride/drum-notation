@@ -99,3 +99,36 @@ export function bindColorNotesButton(btn: HTMLButtonElement, persistent = false)
 export function colorNotesToggle() {
   return bindColorNotesButton(h('button', { class: 'toggle', type: 'button' }, 'Color notes'));
 }
+
+const PLAY_ALONG_KEY = 'drum-notation:play-along';
+
+export interface PlayAlongPrefs {
+  /** Onset detection sensitivity, 0..1. */
+  sensitivity: number;
+  /** How long after a hit further hits still count toward the same notes, in ms (0–150). */
+  batchMs: number;
+}
+
+const PLAY_ALONG_DEFAULTS: PlayAlongPrefs = { sensitivity: 0.5, batchMs: 60 };
+
+export function getPlayAlong(): PlayAlongPrefs {
+  try {
+    const saved = JSON.parse(localStorage.getItem(PLAY_ALONG_KEY) ?? '{}') as Partial<PlayAlongPrefs>;
+    const num = (v: unknown, lo: number, hi: number, d: number) =>
+      typeof v === 'number' && Number.isFinite(v) ? Math.max(lo, Math.min(hi, v)) : d;
+    return {
+      sensitivity: num(saved.sensitivity, 0, 1, PLAY_ALONG_DEFAULTS.sensitivity),
+      batchMs: num(saved.batchMs, 0, 150, PLAY_ALONG_DEFAULTS.batchMs),
+    };
+  } catch {
+    return { ...PLAY_ALONG_DEFAULTS };
+  }
+}
+
+export function setPlayAlong(p: PlayAlongPrefs) {
+  try {
+    localStorage.setItem(PLAY_ALONG_KEY, JSON.stringify(p));
+  } catch {
+    // Storage may be unavailable (private mode); the setting still applies to this page.
+  }
+}
