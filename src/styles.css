@@ -228,6 +228,28 @@ button {
   fill: var(--dc);
 }
 
+/* App-wide "Note pop" switch, right after Color notes. */
+.pop-btn {
+  margin-left: -16px;
+}
+
+.pop-btn svg {
+  stroke-linecap: round;
+}
+
+.pop-btn .ray {
+  opacity: 0.5;
+}
+
+.pop-btn[aria-pressed='true'] .head {
+  fill: currentColor;
+}
+
+.pop-btn[aria-pressed='true'] .ray {
+  opacity: 1;
+  stroke: var(--accent);
+}
+
 /* Content that only makes sense while notes are colored, such as the color legend. */
 html:not(.color-notes) .color-only {
   display: none;
@@ -1269,8 +1291,8 @@ input[type='range'] {
   }
 }
 
-/* Six labelled tabs don't fit beside the brand on narrow tablets; drop the icons. */
-@media (min-width: 761px) and (max-width: 900px) {
+/* Six labelled tabs and the two toggles don't fit beside the brand on narrow tablets; drop the icons. */
+@media (min-width: 761px) and (max-width: 960px) {
   .tabs {
     gap: 2px;
   }
@@ -1295,8 +1317,9 @@ input[type='range'] {
     justify-content: center;
     padding-top: max(12px, env(safe-area-inset-top));
     padding-bottom: 12px;
-    /* Mirror the space reserved for the GitHub link so the brand stays centered. */
-    padding-left: max(64px, calc(env(safe-area-inset-right) + 48px));
+    /* The same space on both sides (toggles on the left, GitHub link on the right) keeps the brand centered. */
+    padding-left: max(108px, calc(env(safe-area-inset-left) + 92px));
+    padding-right: max(108px, calc(env(safe-area-inset-right) + 92px));
   }
 
   .gh-link {
@@ -1310,6 +1333,10 @@ input[type='range'] {
     top: calc(max(12px, env(safe-area-inset-top)) + 15px);
     transform: translateY(-50%);
     margin: 0;
+  }
+
+  .pop-btn {
+    left: calc(max(16px, env(safe-area-inset-left)) + 44px);
   }
 
   .tabs {
@@ -1377,6 +1404,14 @@ input[type='range'] {
 
   .info-panel .swatch {
     display: none;
+  }
+}
+
+/* Too narrow to center the brand on the screen: center it between the toggles and the GitHub link. */
+@media (max-width: 370px) {
+  .topbar {
+    padding-left: max(104px, calc(env(safe-area-inset-left) + 88px));
+    padding-right: max(56px, calc(env(safe-area-inset-right) + 40px));
   }
 }
 
@@ -1970,84 +2005,5 @@ input[type='range'] {
 @media (prefers-reduced-motion: reduce) {
   .score .wrong-flag {
     animation: none;
-  }
-}
-
-/* ---------- Beat effects (experiment) ---------- */
-
-.score .fx-halo,
-.score .fx-band,
-.score .fx-ring,
-.score .fx-glow {
-  pointer-events: none;
-}
-
-.score .fx-halo {
-  fill: var(--hl);
-  opacity: 0;
-}
-
-.score .fx-band {
-  fill: var(--hl);
-  opacity: 0;
-}
-
-.score .fx-ring {
-  fill: none;
-  stroke-width: 1.3;
-  opacity: 0;
-}
-
-.score .fx-glow {
-  opacity: 0;
-}
-
-.fx-picker {
-  position: fixed;
-  left: 16px;
-  bottom: 16px;
-  z-index: 30;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 8px 6px 12px;
-  border: 1px solid rgba(255, 196, 86, 0.35);
-  border-radius: 999px;
-  background: rgba(20, 26, 48, 0.92);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
-  font-size: 13px;
-  color: var(--muted);
-}
-
-.fx-picker .fx-tag {
-  font-size: 10.5px;
-  font-weight: 800;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--accent-2);
-}
-
-.fx-picker select {
-  min-height: 32px;
-  max-width: 52vw;
-  padding: 2px 6px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: var(--bg-2);
-  color: var(--text);
-  font: inherit;
-  font-weight: 600;
-}
-
-html[data-route='quiz'] .fx-picker {
-  display: none;
-}
-
-@media (max-width: 760px) {
-  .fx-picker {
-    left: max(10px, env(safe-area-inset-left));
-    bottom: calc(var(--tab-h) + max(8px, env(safe-area-inset-bottom)) + 10px);
   }
 }

@@ -2,7 +2,7 @@ import './styles.css';
 import { prefetchSamples } from './audio/samples';
 import { gitHubLink } from './ui/github-link';
 import { applyLevel } from './ui/level';
-import { applyColorNotes, bindColorNotesButton } from './ui/prefs';
+import { applyColorNotes, bindColorNotesButton, bindNotePopButton } from './ui/prefs';
 import { stopPlayback } from './ui/playback';
 import { staffView } from './views/staff';
 import { rhythmView } from './views/rhythm';
@@ -10,7 +10,6 @@ import { hitsView } from './views/hits';
 import { timeView } from './views/time';
 import { groovesView } from './views/grooves';
 import { quizView } from './views/quiz';
-import { beatFxPicker } from './ui/beat-fx-picker';
 
 /** A view may return an updater to switch its param in place instead of being rebuilt. */
 type View = (root: HTMLElement, param?: string) => void | ((param?: string) => void);
@@ -27,8 +26,9 @@ const ROUTES: Record<string, View> = {
 applyLevel();
 applyColorNotes();
 bindColorNotesButton(document.getElementById('color-notes') as HTMLButtonElement, true);
+bindNotePopButton(document.getElementById('note-pop') as HTMLButtonElement);
 const root = document.getElementById('view')!;
-document.body.append(gitHubLink(), beatFxPicker());
+document.body.append(gitHubLink());
 let currentRoute = '';
 let updateView: ((param?: string) => void) | null = null;
 
@@ -36,7 +36,6 @@ function route() {
   const [name = 'staff', param] = location.hash.replace(/^#\/?/, '').split('/');
   const key = name in ROUTES ? name : 'staff';
   stopPlayback();
-  document.documentElement.dataset.route = key;
   document.querySelectorAll<HTMLAnchorElement>('.tabs a').forEach((a) => {
     const active = a.dataset.tab === key;
     a.classList.toggle('active', active);

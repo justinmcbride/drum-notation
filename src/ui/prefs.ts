@@ -83,22 +83,58 @@ export function setColorNotes(on: boolean) {
  * click. Listening stops once the button leaves the document, unless `persistent` is set.
  */
 export function bindColorNotesButton(btn: HTMLButtonElement, persistent = false) {
-  btn.setAttribute('aria-pressed', String(getColorNotes()));
-  btn.addEventListener('click', () => setColorNotes(!getColorNotes()));
+  return bindSwitch(btn, getColorNotes, setColorNotes, COLOR_NOTES_EVENT, persistent);
+}
+
+function bindSwitch(
+  btn: HTMLButtonElement,
+  get: () => boolean,
+  set: (on: boolean) => void,
+  event: string,
+  persistent: boolean,
+) {
+  btn.setAttribute('aria-pressed', String(get()));
+  btn.addEventListener('click', () => set(!get()));
   const handler = (e: Event) => {
     if (!persistent && !btn.isConnected) {
-      window.removeEventListener(COLOR_NOTES_EVENT, handler);
+      window.removeEventListener(event, handler);
       return;
     }
     btn.setAttribute('aria-pressed', String((e as CustomEvent<boolean>).detail));
   };
-  window.addEventListener(COLOR_NOTES_EVENT, handler);
+  window.addEventListener(event, handler);
   return btn;
 }
 
 /** In-page "Color notes" toggle bound to the app-wide setting. */
 export function colorNotesToggle() {
   return bindColorNotesButton(h('button', { class: 'toggle', type: 'button' }, 'Color notes'));
+}
+
+const NOTE_POP_KEY = 'drum-notation:note-pop';
+const NOTE_POP_EVENT = 'drum-notation:note-pop-change';
+
+/** Whether sounding notes pop larger during playback. On by default; applies app-wide. */
+export function getNotePop() {
+  try {
+    return localStorage.getItem(NOTE_POP_KEY) !== '0';
+  } catch {
+    return true;
+  }
+}
+
+export function setNotePop(on: boolean) {
+  try {
+    localStorage.setItem(NOTE_POP_KEY, on ? '1' : '0');
+  } catch {
+    // Storage may be unavailable (private mode); the change still applies to this page.
+  }
+  window.dispatchEvent(new CustomEvent<boolean>(NOTE_POP_EVENT, { detail: on }));
+}
+
+/** Keeps the top bar's Note pop button in sync with the setting and flips it on click. */
+export function bindNotePopButton(btn: HTMLButtonElement) {
+  return bindSwitch(btn, getNotePop, setNotePop, NOTE_POP_EVENT, true);
 }
 
 const PLAY_ALONG_KEY = 'drum-notation:play-along';
@@ -166,44 +202,4 @@ export function setPlayAlong(p: PlayAlongPrefs) {
   } catch {
     // Storage may be unavailable (private mode); the setting still applies to this page.
   }
-}
-
-// ---- Beat effect (experiment) ----
-
-export const BEAT_FX = [
-  { id: 'none', name: 'None (current)', desc: 'The gliding playhead; notes light up as they sound.' },
-  { id: 'breathe', name: 'Breathing playhead', desc: 'The playhead flares and glows on each note, thins between notes, and swells again as the next note nears.' },
-  { id: 'pop', name: 'Note pop', desc: 'Each sounding notehead pops a little larger, then eases back.' },
-  { id: 'anticipate', name: 'Anticipation', desc: 'The next note grows and warms toward the highlight color as the playhead approaches, then settles once it sounds.' },
-  { id: 'ripple', name: 'Ripple', desc: 'A soft glow and a ring ripple out from each notehead as it sounds.' },
-  { id: 'band', name: 'Beat band', desc: 'A soft band fills the current beat and pulses as each beat starts, stronger on the downbeat.' },
-  { id: 'combined', name: 'Combined (subtle)', desc: 'A gently breathing playhead, a small note pop and a faint glow on each note.' },
-] as const;
-
-export type BeatFx = (typeof BEAT_FX)[number]['id'];
-
-const BEAT_FX_KEY = 'drum-notation:beat-fx';
-const BEAT_FX_EVENT = 'drum-notation:beat-fx-change';
-
-export function getBeatFx(): BeatFx {
-  try {
-    const v = localStorage.getItem(BEAT_FX_KEY);
-    return BEAT_FX.some((f) => f.id === v) ? (v as BeatFx) : 'none';
-  } catch {
-    return 'none';
-  }
-}
-
-export function setBeatFx(fx: BeatFx) {
-  try {
-    localStorage.setItem(BEAT_FX_KEY, fx);
-  } catch {
-    // Storage may be unavailable (private mode); the setting still applies to this page.
-  }
-  window.dispatchEvent(new CustomEvent(BEAT_FX_EVENT));
-}
-
-export function onBeatFxChange(fn: () => void) {
-  window.addEventListener(BEAT_FX_EVENT, fn);
-  return () => window.removeEventListener(BEAT_FX_EVENT, fn);
 }

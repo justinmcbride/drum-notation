@@ -766,7 +766,7 @@ function drawNoteHeads(
 
     const head = glyph(cg, metrics.glyph, nx, ny, 'ink head');
     head.setAttribute('data-inst', info.id);
-    // The glyph's middle: effects grow the note around it (text boxes differ between browsers).
+    // The glyph's middle: Note pop grows the note around it (text boxes differ between browsers).
     head.setAttribute('data-cx', String(r(nx + (metrics.width * S) / 2)));
     if (colorize) head.setAttribute('style', `--c:${info.color}`);
 

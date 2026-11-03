@@ -2,7 +2,7 @@ import { auditionSlot } from '../audio/player';
 import { meterOf } from '../notation/meter';
 import type { Score } from '../notation/model';
 import { renderScore, type RenderOptions, type RenderResult } from '../notation/render';
-import { createBeatFx } from './beat-fx';
+import { createNotePop } from './note-pop';
 
 export type ViewOptions = Omit<RenderOptions, 'width'> & {
   /** CSS pixels per staff space on wide screens (default 10). */
@@ -73,7 +73,7 @@ export function mountScore(
   let glidedAt = -Infinity;
   /** The scroll target of a jump back into view, so it isn't restarted every frame. */
   let jumpTarget: number | null = null;
-  const fx = createBeatFx({ result: () => view.result, score: () => score, playhead: () => playhead });
+  const pop = createNotePop({ result: () => view.result });
   const host = document.createElement('div');
   host.className = 'score-host';
   container.appendChild(host);
@@ -86,7 +86,7 @@ export function mountScore(
     highlight(m, s) {
       if (opts.scrub) drawPlayhead({ m, s });
       mark(m, s);
-      if (opts.scrub) fx.hit(m, s);
+      if (opts.scrub) pop.hit(m, s);
     },
     glide(m, s, progress) {
       if (!opts.scrub) return;
@@ -95,11 +95,11 @@ export function mountScore(
       glidedAt = performance.now();
       drawPlayhead({ m, s }, x);
       follow(x);
-      fx.frame(m, s, progress, x);
+      pop.frame();
     },
     cue(p) {
       glidedAt = -Infinity;
-      fx.reset();
+      pop.reset();
       view.position = p;
       if (p) {
         drawPlayhead(p);
@@ -245,9 +245,7 @@ export function mountScore(
       // Behind the notes, so a highlighted note stays readable on top of it.
       view.result.svg.insertBefore(playhead, view.result.svg.firstChild);
     }
-    // Centered on the slot, at whatever width a beat effect gave it.
-    const width = Number(playhead.getAttribute('width')) || 2;
-    playhead.setAttribute('x', ((glideTo ?? at.x) - width / 2).toFixed(2));
+    playhead.setAttribute('x', ((glideTo ?? at.x) - 1).toFixed(2));
     playhead.setAttribute('y', at.sys.staffTop.toFixed(1));
     playhead.setAttribute('height', (at.sys.staffBottom - at.sys.staffTop).toFixed(1));
   }
@@ -323,7 +321,7 @@ export function mountScore(
 
   function scrubTo(p: Position, audible: boolean) {
     glidedAt = -Infinity;
-    fx.reset();
+    pop.reset();
     if (same(p, shown) && active.length) return;
     view.position = p;
     drawPlayhead(p);
