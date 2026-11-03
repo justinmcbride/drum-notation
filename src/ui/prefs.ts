@@ -1,3 +1,4 @@
+import { INSTRUMENTS, type Inst } from '../notation/instruments';
 import { h } from './dom';
 
 const KICK_RESTS_KEY = 'drum-notation:kick-rests';
@@ -107,9 +108,27 @@ export interface PlayAlongPrefs {
   sensitivity: number;
   /** How long after a hit further hits still count toward the same notes, in ms (0–150). */
   batchMs: number;
+  /** Where hits come from. */
+  source: 'mic' | 'midi';
+  /** MIDI: wait for the right drum (true) or move on with any hit (false). */
+  strict: boolean;
+  /** MIDI: play the app's drum sounds for each pad stroke. */
+  midiSound: boolean;
+  /** MIDI input id, or null for all inputs. */
+  midiDevice: string | null;
+  /** MIDI note → drum, on top of the General MIDI map. */
+  midiMap: Record<number, Inst>;
 }
 
-const PLAY_ALONG_DEFAULTS: PlayAlongPrefs = { sensitivity: 0.5, batchMs: 60 };
+const PLAY_ALONG_DEFAULTS: PlayAlongPrefs = {
+  sensitivity: 0.5,
+  batchMs: 60,
+  source: 'mic',
+  strict: true,
+  midiSound: false,
+  midiDevice: null,
+  midiMap: {},
+};
 
 export function getPlayAlong(): PlayAlongPrefs {
   try {
@@ -119,10 +138,26 @@ export function getPlayAlong(): PlayAlongPrefs {
     return {
       sensitivity: num(saved.sensitivity, 0, 1, PLAY_ALONG_DEFAULTS.sensitivity),
       batchMs: num(saved.batchMs, 0, 150, PLAY_ALONG_DEFAULTS.batchMs),
+      source: saved.source === 'midi' ? 'midi' : 'mic',
+      strict: typeof saved.strict === 'boolean' ? saved.strict : PLAY_ALONG_DEFAULTS.strict,
+      midiSound: typeof saved.midiSound === 'boolean' ? saved.midiSound : PLAY_ALONG_DEFAULTS.midiSound,
+      midiDevice: typeof saved.midiDevice === 'string' ? saved.midiDevice : null,
+      midiMap: padMap(saved.midiMap),
     };
   } catch {
     return { ...PLAY_ALONG_DEFAULTS };
   }
+}
+
+function padMap(v: unknown): Record<number, Inst> {
+  const out: Record<number, Inst> = {};
+  if (!v || typeof v !== 'object') return out;
+  for (const [k, inst] of Object.entries(v as Record<string, unknown>)) {
+    const note = Number(k);
+    if (Number.isInteger(note) && note >= 0 && note < 128 && typeof inst === 'string' && inst in INSTRUMENTS)
+      out[note] = inst as Inst;
+  }
+  return out;
 }
 
 export function setPlayAlong(p: PlayAlongPrefs) {

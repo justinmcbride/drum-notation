@@ -267,6 +267,24 @@ function strike(hit: Hit, t: number, v: number, chokeAfter?: number) {
   }
 }
 
+/** Plays one stroke right away at loudness `v` (0.12–1.15), e.g. for a MIDI pad. */
+export function strikeNow(hit: Hit, v: number) {
+  const ac = audioContext();
+  strike(hit, ac.currentTime + 0.005, v);
+}
+
+/** A hand grabbing a cymbal: cuts its sample off (the synth voices are short anyway). */
+export function chokeNow(hit: Hit) {
+  chokeSamples([sampleKeyFor(hit)], audioContext().currentTime, 0.02);
+}
+
+/** Closing the hi-hat pedal: cuts off a ringing open hat. */
+export function closeHatNow() {
+  const t = audioContext().currentTime;
+  chokeOpenHat(t);
+  chokeSamples(HAT_RINGING, t, 0.03);
+}
+
 export interface HitTiming {
   /** Length of the written note, in seconds. */
   noteSec: number;

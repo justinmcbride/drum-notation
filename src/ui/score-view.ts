@@ -37,9 +37,13 @@ export interface ScoreView {
   /** Shows the playhead and highlight at a position, or hides them with null and returns to the top. */
   cue(p: Position | null): void;
   clear(): void;
+  /** Briefly marks a wrong stroke at a position, at a staff position (0 = bottom line, 8 = top line). */
+  flag(p: Position, staffPos: number): void;
   update(score?: Score, opts?: Partial<ViewOptions>): void;
   destroy(): void;
 }
+
+const SVG_NS = 'http://www.w3.org/2000/svg';
 
 function pxPerUnit(width: number, spacePx: number) {
   const base = spacePx / 10;
@@ -89,6 +93,29 @@ export function mountScore(
     clear() {
       active.forEach((n) => n.classList.remove('hl'));
       active = [];
+    },
+    flag(p, staffPos) {
+      const at = locate(p);
+      const svg = view.result?.svg;
+      if (!at || !svg) return;
+      const space = (at.sys.lineBottom - at.sys.lineTop) / 4;
+      const y = at.sys.lineBottom - (staffPos * space) / 2;
+      const d = space * 0.45;
+      const g = document.createElementNS(SVG_NS, 'g');
+      g.setAttribute('class', 'wrong-flag');
+      g.setAttribute('aria-hidden', 'true');
+      const ring = document.createElementNS(SVG_NS, 'circle');
+      ring.setAttribute('cx', at.x.toFixed(1));
+      ring.setAttribute('cy', y.toFixed(1));
+      ring.setAttribute('r', (space * 0.8).toFixed(1));
+      const cross = document.createElementNS(SVG_NS, 'path');
+      cross.setAttribute(
+        'd',
+        `M${(at.x - d).toFixed(1)} ${(y - d).toFixed(1)}L${(at.x + d).toFixed(1)} ${(y + d).toFixed(1)}M${(at.x + d).toFixed(1)} ${(y - d).toFixed(1)}L${(at.x - d).toFixed(1)} ${(y + d).toFixed(1)}`,
+      );
+      g.append(ring, cross);
+      svg.appendChild(g);
+      window.setTimeout(() => g.remove(), 900);
     },
     update(nextScore, nextOpts) {
       if (nextScore && nextScore !== score) {

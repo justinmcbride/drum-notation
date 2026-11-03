@@ -1,4 +1,5 @@
 import { groupAt, meterOf } from '../notation/meter';
+import type { Inst } from '../notation/instruments';
 import type { Score } from '../notation/model';
 import { voiceOf } from '../notation/model';
 
@@ -21,11 +22,19 @@ export interface Target {
   lengthSlots: number;
   /** Slot index from the start of the score. */
   abs: number;
+  /** The drums written here, one per note (for inputs that know which drum was hit). */
+  insts: Inst[];
+  /** Drums of the grace notes (flams, drags): counted when played, never required. */
+  graces: Inst[];
+  /** Drums playing a roll here: any number of further strokes on them belong to the roll. */
+  rollInsts: Inst[];
 }
 
 export type FollowEvent =
   | { type: 'count'; target: Target; count: number }
   | { type: 'advance'; from: Target; to: Target | null; time: number }
+  /** A drum the waiting notes don't have (only for inputs that know which drum was hit). */
+  | { type: 'wrong'; inst: Inst; target: Target }
   | { type: 'done' };
 
 export interface FollowOptions {
@@ -34,6 +43,31 @@ export interface FollowOptions {
   loop: boolean;
   /** The written tempo, used for rolls until the player's own tempo is known. */
   bpm: number;
+  /**
+   * For hits that say which drum they are: wait for the right drums (true), or count any hit
+   * toward the waiting notes like the microphone does (false). Wrong drums are reported either way.
+   */
+  strict?: boolean;
+}
+
+/** Whether a stroke on `got` plays a note written for `want` (the ride's bow and bell are one cymbal). */
+export function sameDrum(want: Inst, got: Inst) {
+  if (want === got) return true;
+  const ride = (i: Inst) => i === 'ride' || i === 'rideBell';
+  return ride(want) && ride(got);
+}
+
+interface Batch {
+  start: number;
+  count: number;
+  /** Drums still required (identity hits only). */
+  need: Inst[];
+  /** Grace strokes still welcome. */
+  grace: Inst[];
+  /** Whether the hits say which drum they are. */
+  identity: boolean;
+  /** Whether the slot waits for its drums rather than its batch window. */
+  strict: boolean;
 }
 
 export function targetsOf(score: Score): Target[] {
@@ -47,18 +81,25 @@ export function targetsOf(score: Score): Target[] {
       let graceSec = 0;
       let roll = false;
       let lengthSlots = 1;
+      const insts: Inst[] = [];
+      const graces: Inst[] = [];
+      const rollInsts: Inst[] = [];
       for (const hit of hits) {
         expected++;
+        insts.push(hit.inst);
         if (hit.mods.includes('flam')) {
           expected += 1;
           graceSec = Math.max(graceSec, 0.04);
+          graces.push(hit.inst);
         }
         if (hit.mods.includes('drag')) {
           expected += 2;
           graceSec = Math.max(graceSec, 0.09);
+          graces.push(hit.inst, hit.inst);
         }
         if (hit.mods.includes('roll') || hit.mods.includes('buzz')) {
           roll = true;
+          rollInsts.push(hit.inst);
           const group = groupAt(meter, s);
           const end = group.start + group.len;
           let e = s + 1;
@@ -74,7 +115,7 @@ export function targetsOf(score: Score): Target[] {
         prev.lengthSlots += lengthSlots;
         continue;
       }
-      out.push({ m, s, expected, graceSec, roll, lengthSlots, abs });
+      out.push({ m, s, expected, graceSec, roll, lengthSlots, abs, insts, graces, rollInsts });
     }
   });
   return out;
@@ -99,7 +140,7 @@ export class Follower {
   index = 0;
   done = false;
   private loops = 0;
-  private batch: { start: number; count: number } | null = null;
+  private batch: Batch | null = null;
   /** When the previous slot was played, and where (in slots, counting loops). */
   private prev: { time: number; pos: number } | null = null;
   private intervals: number[] = [];
@@ -122,6 +163,20 @@ export class Follower {
   /** Strokes heard so far for the current slot. */
   heard() {
     return this.batch?.count ?? 0;
+  }
+
+  /** The current slot's drums that have been played (identity hits only). */
+  played(): Inst[] {
+    const t = this.current();
+    const b = this.batch;
+    if (!t || !b) return [];
+    const left = [...b.need];
+    return t.insts.filter((i) => {
+      const k = left.indexOf(i);
+      if (k < 0) return true;
+      left.splice(k, 1);
+      return false;
+    });
   }
 
   /** The player's tempo in bpm (smoothed), or null until there are enough hits. */
@@ -154,29 +209,87 @@ export class Follower {
     return out;
   }
 
-  /** A hit was heard at time t (seconds). */
-  hit(t: number): FollowEvent[] {
+  /**
+   * A hit at time t (seconds). Microphone hits don't know their drum; MIDI hits pass `inst`, so
+   * the waiting notes can tell a right drum from a wrong one.
+   */
+  hit(t: number, inst?: Inst): FollowEvent[] {
     const out: FollowEvent[] = [];
     if (this.batch && this.expired(t)) this.advance(out);
-    const target = this.current();
+    let target = this.current();
     if (!target) return out;
-    if (!this.batch) {
-      // After a pause, the old tempo no longer says anything about the player.
-      if (this.prev && t - this.prev.time > TEMPO_RESET) this.intervals = [];
-      this.batch = { start: t, count: 1 };
-    } else {
-      this.batch.count++;
+    if (inst === undefined) {
+      if (!this.batch) this.open(target, t, false);
+      this.count(target, out);
+      return out;
     }
-    out.push({ type: 'count', target, count: this.batch.count });
-    // Once every expected stroke is in, move on right away so fast notes aren't swallowed.
-    if (!target.roll && this.batch.count >= target.expected) this.advance(out);
+
+    let b = this.batch ?? this.fresh(target, t, true);
+    let got = this.take(b, target, inst);
+    if (!got && this.batch && !b.need.length) {
+      // The waiting notes are all in, so this stroke starts the next ones.
+      this.advance(out);
+      target = this.current();
+      if (!target) return out;
+      b = this.fresh(target, t, true);
+      got = this.take(b, target, inst);
+    }
+    if (!got) {
+      // Another stroke on a drum these notes already have is an extra (a roll running long, a
+      // double), not a wrong drum.
+      const extra = target.insts.some((x) => sameDrum(x, inst));
+      if (!extra) out.push({ type: 'wrong', inst, target });
+      if (b.strict) return out;
+    }
+    if (!this.batch) this.batch = b;
+    this.count(target, out);
     return out;
+  }
+
+  private fresh(target: Target, t: number, identity: boolean): Batch {
+    return {
+      start: t,
+      count: 0,
+      need: identity ? [...target.insts] : [],
+      grace: identity ? [...target.graces] : [],
+      identity,
+      strict: identity && !!this.opts.strict,
+    };
+  }
+
+  private open(target: Target, t: number, identity: boolean) {
+    this.batch = this.fresh(target, t, identity);
+  }
+
+  /** Matches a stroke against what the slot still wants. */
+  private take(b: Batch, target: Target, inst: Inst) {
+    for (const list of [b.need, b.grace]) {
+      const i = list.findIndex((x) => sameDrum(x, inst));
+      if (i >= 0) {
+        list.splice(i, 1);
+        return true;
+      }
+    }
+    return target.roll && target.rollInsts.some((x) => sameDrum(x, inst));
+  }
+
+  private count(target: Target, out: FollowEvent[]) {
+    const b = this.batch!;
+    b.count++;
+    out.push({ type: 'count', target, count: b.count });
+    if (target.roll) return;
+    // Once every expected stroke is in, move on right away so fast notes aren't swallowed.
+    const drumsIn = b.identity && !b.need.length && !b.grace.length;
+    const enough = !b.strict && b.count >= target.expected;
+    if (drumsIn || enough) this.advance(out);
   }
 
   private expired(t: number) {
     const target = this.current();
     const b = this.batch;
     if (!target || !b) return false;
+    // Waiting for the right drum: no window closes the slot.
+    if (b.strict && b.need.length) return false;
     // A roll takes every stroke until the next note is due, whatever the gaps between them.
     if (target.roll) return t - b.start > this.rollSec(target);
     return t - b.start > this.opts.batchMs / 1000 + target.graceSec;

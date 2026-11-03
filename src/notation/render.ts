@@ -57,6 +57,9 @@ export interface TimelineSystem {
   /** Vertical extent of a playhead drawn over the staff. */
   staffTop: number;
   staffBottom: number;
+  /** The top and bottom staff lines. */
+  lineTop: number;
+  lineBottom: number;
   measures: { index: number; slotX: number[] }[];
 }
 
@@ -466,6 +469,8 @@ export function renderScore(score: Score, options: RenderOptions): RenderResult 
       bottom: offset + bottom,
       staffTop: offset + Math.min(bounds.min, STAFF_TOP - 1.5 * S),
       staffBottom: offset + Math.max(Math.min(bounds.max, STAFF_BOTTOM + 3 * S), STAFF_BOTTOM + 1.5 * S),
+      lineTop: offset + STAFF_TOP,
+      lineBottom: offset + STAFF_BOTTOM,
       measures: timed,
     });
     cursorY = offset + bottom + 1.5 * S;

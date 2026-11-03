@@ -1723,3 +1723,252 @@ input[type='range'] {
     animation: none;
   }
 }
+
+/* ---------- Play along: MIDI ---------- */
+
+.play-along:not(.midi) .pa-midi,
+.play-along.midi .pa-mic {
+  display: none;
+}
+
+.play-along:not(.listening) .pa-device,
+.play-along:not(.listening) .pa-checks,
+.play-along.failed .pa-assignments {
+  display: none;
+}
+
+.pa-source {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.pa-source .segmented button {
+  padding: 5px 16px;
+  min-height: 34px;
+}
+
+.pa-source .segmented button[aria-checked='true'] {
+  background: var(--accent);
+  color: #fff;
+}
+
+.pa-status.warn {
+  color: var(--bad);
+  font-weight: 600;
+}
+
+.pa-misses {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pa-wrong {
+  font-size: 18px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+.pa-chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.pa-chips:empty {
+  display: none;
+}
+
+.pa-chip {
+  padding: 2px 9px;
+  border-radius: 999px;
+  border: 1.5px solid var(--muted);
+  font-size: 12.5px;
+  font-weight: 700;
+  line-height: 18px;
+  color: var(--muted);
+}
+
+.pa-chip.on {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+
+.pa-device {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  gap: 8px 20px;
+  align-items: center;
+}
+
+.pa-device select {
+  flex: 1;
+  min-width: 0;
+  min-height: 36px;
+  padding: 4px 8px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--bg-2, #1b1d2a);
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+}
+
+.pa-monitor {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  font-size: 13.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.pa-last.unknown,
+.pa-pedal {
+  color: var(--muted);
+}
+
+.pa-checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 22px;
+}
+
+.pa-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.pa-check input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+}
+
+.pa-assignments summary {
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  list-style: none;
+}
+
+.pa-assignments summary::-webkit-details-marker {
+  display: none;
+}
+
+.pa-assignments summary::before {
+  content: '';
+  width: 0;
+  height: 0;
+  border-left: 6px solid var(--muted);
+  border-top: 4.5px solid transparent;
+  border-bottom: 4.5px solid transparent;
+  transition: transform 0.15s;
+}
+
+.pa-assignments[open] summary::before {
+  transform: rotate(90deg);
+}
+
+.pa-assignments .pa-help {
+  margin: 4px 0 8px;
+}
+
+.pa-pads {
+  list-style: none;
+  margin: 0 0 10px;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 250px), 1fr));
+  gap: 4px 18px;
+}
+
+.pa-pads li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+}
+
+.pa-pad-name {
+  flex: 1;
+  min-width: 0;
+}
+
+.pa-pad-notes {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.pa-assign,
+.pa-reset-pads {
+  min-height: 32px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.pa-assign {
+  min-width: 92px;
+}
+
+.pa-assign.learning {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.pa-assign:disabled,
+.pa-reset-pads:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* A wrong drum, marked on the staff where that drum is written. */
+.score .wrong-flag {
+  pointer-events: none;
+  animation: pa-flag 0.9s ease-out forwards;
+}
+
+.score .wrong-flag circle {
+  fill: rgba(255, 93, 115, 0.2);
+  stroke: var(--bad);
+  stroke-width: 1.4;
+}
+
+.score .wrong-flag path {
+  stroke: var(--bad);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+}
+
+@keyframes pa-flag {
+  0%,
+  60% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .score .wrong-flag {
+    animation: none;
+  }
+}
