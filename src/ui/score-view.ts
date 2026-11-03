@@ -2,6 +2,7 @@ import { auditionSlot } from '../audio/player';
 import { meterOf } from '../notation/meter';
 import type { Score } from '../notation/model';
 import { renderScore, type RenderOptions, type RenderResult } from '../notation/render';
+import { createBeatFx } from './beat-fx';
 
 export type ViewOptions = Omit<RenderOptions, 'width'> & {
   /** CSS pixels per staff space on wide screens (default 10). */
@@ -72,6 +73,7 @@ export function mountScore(
   let glidedAt = -Infinity;
   /** The scroll target of a jump back into view, so it isn't restarted every frame. */
   let jumpTarget: number | null = null;
+  const fx = createBeatFx({ result: () => view.result, score: () => score, playhead: () => playhead });
   const host = document.createElement('div');
   host.className = 'score-host';
   container.appendChild(host);
@@ -84,6 +86,7 @@ export function mountScore(
     highlight(m, s) {
       if (opts.scrub) drawPlayhead({ m, s });
       mark(m, s);
+      if (opts.scrub) fx.hit(m, s);
     },
     glide(m, s, progress) {
       if (!opts.scrub) return;
@@ -92,9 +95,11 @@ export function mountScore(
       glidedAt = performance.now();
       drawPlayhead({ m, s }, x);
       follow(x);
+      fx.frame(m, s, progress, x);
     },
     cue(p) {
       glidedAt = -Infinity;
+      fx.reset();
       view.position = p;
       if (p) {
         drawPlayhead(p);
@@ -316,6 +321,7 @@ export function mountScore(
 
   function scrubTo(p: Position, audible: boolean) {
     glidedAt = -Infinity;
+    fx.reset();
     if (same(p, shown) && active.length) return;
     view.position = p;
     drawPlayhead(p);

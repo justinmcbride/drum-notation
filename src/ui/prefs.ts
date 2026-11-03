@@ -167,3 +167,43 @@ export function setPlayAlong(p: PlayAlongPrefs) {
     // Storage may be unavailable (private mode); the setting still applies to this page.
   }
 }
+
+// ---- Beat effect (experiment) ----
+
+export const BEAT_FX = [
+  { id: 'none', name: 'None (current)', desc: 'The gliding playhead; notes light up as they sound.' },
+  { id: 'breathe', name: 'Breathing playhead', desc: 'The playhead flares and glows on each note, thins between notes, and swells again as the next note nears.' },
+  { id: 'pop', name: 'Note pop', desc: 'Each sounding notehead pops a little larger, then eases back.' },
+  { id: 'anticipate', name: 'Anticipation', desc: 'The next note grows and warms toward the highlight color as the playhead approaches, then settles once it sounds.' },
+  { id: 'ripple', name: 'Ripple', desc: 'A soft glow and a ring ripple out from each notehead as it sounds.' },
+  { id: 'band', name: 'Beat band', desc: 'A soft band fills the current beat and pulses as each beat starts, stronger on the downbeat.' },
+  { id: 'combined', name: 'Combined (subtle)', desc: 'A gently breathing playhead, a small note pop and a faint glow on each note.' },
+] as const;
+
+export type BeatFx = (typeof BEAT_FX)[number]['id'];
+
+const BEAT_FX_KEY = 'drum-notation:beat-fx';
+const BEAT_FX_EVENT = 'drum-notation:beat-fx-change';
+
+export function getBeatFx(): BeatFx {
+  try {
+    const v = localStorage.getItem(BEAT_FX_KEY);
+    return BEAT_FX.some((f) => f.id === v) ? (v as BeatFx) : 'none';
+  } catch {
+    return 'none';
+  }
+}
+
+export function setBeatFx(fx: BeatFx) {
+  try {
+    localStorage.setItem(BEAT_FX_KEY, fx);
+  } catch {
+    // Storage may be unavailable (private mode); the setting still applies to this page.
+  }
+  window.dispatchEvent(new CustomEvent(BEAT_FX_EVENT));
+}
+
+export function onBeatFxChange(fn: () => void) {
+  window.addEventListener(BEAT_FX_EVENT, fn);
+  return () => window.removeEventListener(BEAT_FX_EVENT, fn);
+}

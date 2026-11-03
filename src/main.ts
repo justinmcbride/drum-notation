@@ -10,6 +10,7 @@ import { hitsView } from './views/hits';
 import { timeView } from './views/time';
 import { groovesView } from './views/grooves';
 import { quizView } from './views/quiz';
+import { beatFxPicker } from './ui/beat-fx-picker';
 
 /** A view may return an updater to switch its param in place instead of being rebuilt. */
 type View = (root: HTMLElement, param?: string) => void | ((param?: string) => void);
@@ -27,7 +28,7 @@ applyLevel();
 applyColorNotes();
 bindColorNotesButton(document.getElementById('color-notes') as HTMLButtonElement, true);
 const root = document.getElementById('view')!;
-document.body.append(gitHubLink());
+document.body.append(gitHubLink(), beatFxPicker());
 let currentRoute = '';
 let updateView: ((param?: string) => void) | null = null;
 
@@ -35,6 +36,7 @@ function route() {
   const [name = 'staff', param] = location.hash.replace(/^#\/?/, '').split('/');
   const key = name in ROUTES ? name : 'staff';
   stopPlayback();
+  document.documentElement.dataset.route = key;
   document.querySelectorAll<HTMLAnchorElement>('.tabs a').forEach((a) => {
     const active = a.dataset.tab === key;
     a.classList.toggle('active', active);
