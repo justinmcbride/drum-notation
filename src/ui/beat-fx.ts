@@ -17,6 +17,7 @@ const NS = 'http://www.w3.org/2000/svg';
 
 interface Parts {
   breathe: number;
+  /** How much a sounding note grows at its peak (1 = to twice its size). */
   pop: number;
   anticipate: number;
   ripple: number;
@@ -34,7 +35,7 @@ const VARIANTS: Record<BeatFx, Parts> = {
   anticipate: { ...NONE, anticipate: 1 },
   ripple: { ...NONE, ripple: 1, glow: 1 },
   band: { ...NONE, band: 1 },
-  combined: { ...NONE, breathe: 0.55, pop: 0.6, glow: 0.7 },
+  combined: { ...NONE, breathe: 0.55, pop: 0.23, glow: 0.7 },
 };
 
 let current: BeatFx = getBeatFx();
@@ -68,6 +69,9 @@ interface Note {
   cx: number;
   cy: number;
 }
+
+/** Big pops draw above everything else on their line. */
+const RAISE_FROM = 1.5;
 
 /** A note growing and easing back: from 1 up to `peak` and back, or from `from` down to 1. */
 interface Grow {
@@ -147,6 +151,8 @@ export function createBeatFx(ctx: BeatFxContext): BeatFxEngine {
   let leaningKey = '';
   let grows: Grow[] = [];
   let spreads: Spread[] = [];
+  /** Columns lifted to the top of their line while their notes pop, and where they came from. */
+  const raised = new Map<Element, Comment>();
 
   const on = () => current !== 'none' && !reduceMotion?.matches;
   const parts = () => VARIANTS[current];
@@ -195,9 +201,33 @@ export function createBeatFx(ctx: BeatFxContext): BeatFxEngine {
     }
   }
 
+  /**
+   * Moves a note's column to the end of its line's group, so it draws over neighboring notes,
+   * stems and beams. Measures and columns carry no transforms, so nothing moves on screen.
+   */
+  function raise(note: Note) {
+    const col = note.head.closest('.col');
+    const line = col?.closest('.system');
+    if (!col || !line || raised.has(col) || !col.parentNode) return;
+    // A placeholder keeps the column's exact spot, even when its neighbors are lifted too.
+    const spot = document.createComment('');
+    col.replaceWith(spot);
+    raised.set(col, spot);
+    line.appendChild(col);
+  }
+
+  function lower(col: Element) {
+    const spot = raised.get(col);
+    if (!spot) return;
+    raised.delete(col);
+    if (spot.parentNode) spot.replaceWith(col);
+    else col.remove();
+  }
+
   function reset() {
     for (const g of grows) unscaleNote(g.note);
     grows = [];
+    for (const col of [...raised.keys()]) lower(col);
     for (const sp of spreads) sp.el.remove();
     spreads = [];
     clearLean();
@@ -256,7 +286,12 @@ export function createBeatFx(ctx: BeatFxContext): BeatFxEngine {
       if (p.anticipate && leaned.has(note.head)) {
         scaleNote(note, grownTo);
         grow(note, { dur: 240, from: grownTo });
-      } else if (p.pop) grow(note, { dur: 340, peak: 1 + 0.38 * p.pop });
+      } else if (p.pop) {
+        const peak = 1 + p.pop;
+        // Bigger pops ease back a little longer, so they don't snap.
+        grow(note, { dur: 340 + 120 * clamp01((peak - 1.4) / 0.6), peak });
+        if (peak >= RAISE_FROM) raise(note);
+      }
       const w = 2 * Math.abs(note.cx - Number(note.head.getAttribute('x')));
       const color = tint(note.head);
       if (p.glow) spread(note, 'fx-glow', color, w * 0.57, w * 1.19, 0.42 * p.glow, 420, false);
@@ -279,6 +314,8 @@ export function createBeatFx(ctx: BeatFxContext): BeatFxEngine {
       }
       if (t >= 1) {
         unscaleNote(g.note);
+        const col = g.note.head.closest('.col');
+        if (col && !grows.some((x) => x !== g && x.note.head.closest('.col') === col && now - x.start < x.dur)) lower(col);
         return false;
       }
       scaleNote(g.note, s);
