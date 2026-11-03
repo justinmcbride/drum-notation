@@ -60,7 +60,8 @@ export interface TimelineSystem {
   /** The top and bottom staff lines. */
   lineTop: number;
   lineBottom: number;
-  measures: { index: number; slotX: number[] }[];
+  /** slotX: the x of every grid slot; endX: where the time after the last slot runs out (before the barline). */
+  measures: { index: number; slotX: number[]; endX: number }[];
 }
 
 interface NoteItem {
@@ -435,7 +436,7 @@ export function renderScore(score: Score, options: RenderOptions): RenderResult 
     for (const m of line) {
       const width = m.fixed + m.flex * k;
       drawMeasure(sys, m, mx, width, k, opts, bounds, columns);
-      timed.push({ index: m.index, slotX: slotPositions(m, mx + m.leftPad, score.slots) });
+      timed.push({ index: m.index, ...slotPositions(m, mx + m.leftPad, score.slots) });
       mx += width;
     }
 
@@ -496,7 +497,7 @@ function slotPositions(m: MeasureLayout, startX: number, slots: number) {
     const b = anchors[i + 1];
     for (let s = a.slot; s < b.slot; s++) xs.push(a.x + ((b.x - a.x) * (s - a.slot)) / (b.slot - a.slot));
   }
-  return xs;
+  return { slotX: xs, endX: anchors[anchors.length - 1].x };
 }
 
 function drawMeasure(

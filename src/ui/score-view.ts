@@ -34,6 +34,8 @@ export interface ScoreView {
   /** Set by the player while this score plays. */
   scrubber: ScrubHandler | null;
   highlight(measure: number, slot: number): void;
+  /** Moves the playhead part of the way (progress 0..1) from a slot toward the next, for smooth playback. */
+  glide(measure: number, slot: number, progress: number): void;
   /** Shows the playhead and highlight at a position, or hides them with null and returns to the top. */
   cue(p: Position | null): void;
   clear(): void;
@@ -66,6 +68,10 @@ export function mountScore(
   /** Where the playhead is drawn (the cue, a scrub, or the playing slot). */
   let shown: Position | null = null;
   let playhead: SVGRectElement | null = null;
+  /** When the playhead last glided (performance.now() ms); while recent, it drives sideways scrolling. */
+  let glidedAt = -Infinity;
+  /** The scroll target of a jump back into view, so it isn't restarted every frame. */
+  let jumpTarget: number | null = null;
   const host = document.createElement('div');
   host.className = 'score-host';
   container.appendChild(host);
@@ -79,7 +85,16 @@ export function mountScore(
       if (opts.scrub) drawPlayhead({ m, s });
       mark(m, s);
     },
+    glide(m, s, progress) {
+      if (!opts.scrub) return;
+      const x = glideX({ m, s }, progress);
+      if (x === null) return;
+      glidedAt = performance.now();
+      drawPlayhead({ m, s }, x);
+      follow(x);
+    },
     cue(p) {
+      glidedAt = -Infinity;
       view.position = p;
       if (p) {
         drawPlayhead(p);
@@ -144,7 +159,9 @@ export function mountScore(
         active.push(node);
       }
     }
-    if (col && host.scrollWidth > host.clientWidth) {
+    // While gliding, follow() scrolls along with the playhead instead.
+    const gliding = performance.now() - glidedAt < 250;
+    if (col && !gliding && host.scrollWidth > host.clientWidth) {
       const c = col.getBoundingClientRect();
       const hb = host.getBoundingClientRect();
       if (c.left < hb.left + 24 || c.right > hb.right - 24) {
@@ -162,7 +179,51 @@ export function mountScore(
     return null;
   }
 
-  function drawPlayhead(p: Position | null) {
+  /**
+   * The x of a point part of the way through a slot: toward the next slot, or across the barline
+   * to the next measure's first slot if it's on the same line. At the end of a line it runs to
+   * the end of the measure, then jumps to the next line.
+   */
+  function glideX(p: Position, progress: number) {
+    for (const sys of view.result?.timeline ?? []) {
+      const i = sys.measures.findIndex((x) => x.index === p.m);
+      if (i < 0) continue;
+      const meas = sys.measures[i];
+      const from = meas.slotX[p.s];
+      if (from === undefined) return null;
+      const nextMeas = sys.measures[i + 1];
+      const to =
+        meas.slotX[p.s + 1] ?? (nextMeas && nextMeas.index === p.m + 1 ? nextMeas.slotX[0] : undefined) ?? meas.endX;
+      return from + (to - from) * progress;
+    }
+    return null;
+  }
+
+  /** Keeps a gliding playhead in view on a score wider than the screen, scrolling along with it. */
+  function follow(x: number) {
+    const svg = view.result?.svg;
+    if (!svg || host.scrollWidth <= host.clientWidth + 1) return;
+    const box = svg.getBoundingClientRect();
+    const left = host.scrollLeft;
+    // In the host's scrolled content: where the SVG starts, plus x scaled to CSS pixels.
+    const px = box.left - host.getBoundingClientRect().left - host.clientLeft + left + x * (box.width / view.result!.width);
+    const w = host.clientWidth;
+    if (px < left + 16 || px > left + w - 16) {
+      // Out of view (looped back, or the reader scrolled away): glide back to it once.
+      const target = Math.max(0, px - w / 3);
+      if (jumpTarget === null || Math.abs(jumpTarget - target) > w / 4) {
+        jumpTarget = target;
+        host.scrollTo({ left: target, behavior: 'smooth' });
+      }
+      return;
+    }
+    jumpTarget = null;
+    // Past 40% of the width, the music scrolls under a playhead that stays put.
+    const pin = px - w * 0.4;
+    if (pin > left + 0.5) host.scrollTo({ left: pin, behavior: 'instant' });
+  }
+
+  function drawPlayhead(p: Position | null, glideTo?: number) {
     shown = p;
     const at = p && locate(p);
     if (!at || !view.result) {
@@ -179,7 +240,7 @@ export function mountScore(
       // Behind the notes, so a highlighted note stays readable on top of it.
       view.result.svg.insertBefore(playhead, view.result.svg.firstChild);
     }
-    playhead.setAttribute('x', (at.x - 1).toFixed(1));
+    playhead.setAttribute('x', ((glideTo ?? at.x) - 1).toFixed(2));
     playhead.setAttribute('y', at.sys.staffTop.toFixed(1));
     playhead.setAttribute('height', (at.sys.staffBottom - at.sys.staffTop).toFixed(1));
   }
@@ -254,6 +315,7 @@ export function mountScore(
   }
 
   function scrubTo(p: Position, audible: boolean) {
+    glidedAt = -Infinity;
     if (same(p, shown) && active.length) return;
     view.position = p;
     drawPlayhead(p);

@@ -10,6 +10,8 @@ export interface PlayerOptions {
   loop: boolean;
   metronome: boolean;
   onSlot?: (measure: number, slot: number) => void;
+  /** Every animation frame while playing: the slot sounding now and how far through it the music is (0..1). */
+  onFrame?: (measure: number, slot: number, progress: number) => void;
   onStop?: () => void;
 }
 
@@ -24,6 +26,10 @@ export class Player {
   private slot = 0;
   private nextTime = 0;
   private visual: { time: number; m: number; s: number }[] = [];
+  /** The slot sounding now (the last one handed to onSlot). */
+  private sounding: { time: number; m: number; s: number } | null = null;
+  /** performance.now() seconds → audio clock seconds, for a smooth clock between audio callbacks. */
+  private clockOffset: number | null = null;
   private endTime: number | null = null;
   private run = 0;
   /** Where the next (re)start begins. */
@@ -94,6 +100,22 @@ export class Player {
     cancelAnimationFrame(this.raf);
     this.timer = null;
     this.visual = [];
+    this.sounding = null;
+  }
+
+  /**
+   * The audio clock, smoothed. currentTime only moves when the audio thread renders a block,
+   * which can be every 10–20 ms on some devices, so reading it every frame makes motion judder.
+   * This follows performance.now() instead and is gently pulled toward currentTime.
+   */
+  private smoothTime(ac: AudioContext) {
+    const audio = ac.currentTime;
+    const wall = performance.now() / 1000;
+    if (this.clockOffset === null) this.clockOffset = audio - wall;
+    const drift = audio - (wall + this.clockOffset);
+    if (Math.abs(drift) > 0.05) this.clockOffset = audio - wall;
+    else this.clockOffset += drift * 0.1;
+    return wall + this.clockOffset;
   }
 
   private begin(ac: AudioContext, delay: number) {
@@ -107,7 +129,15 @@ export class Player {
       const now = ac.currentTime;
       while (this.visual.length && this.visual[0].time <= now) {
         const v = this.visual.shift()!;
+        this.sounding = v;
         this.opts.onSlot?.(v.m, v.s);
+      }
+      const at = this.sounding;
+      if (at && this.opts.onFrame) {
+        const next = this.visual[0];
+        const span = next ? next.time - at.time : this.sixteenth;
+        const p = span > 0 ? (this.smoothTime(ac) - at.time) / span : 0;
+        this.opts.onFrame(at.m, at.s, Math.max(0, Math.min(1, p)));
       }
       if (this.endTime !== null && now >= this.endTime) {
         this.stop();

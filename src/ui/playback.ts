@@ -20,6 +20,8 @@ export interface PlaybackOptions {
  */
 export function playScore(score: Score, view: ScoreView, opts: PlaybackOptions): Player {
   stopPlayback();
+  // With reduced motion the playhead steps from note to note instead of gliding.
+  const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)');
   const scrubber: ScrubHandler = {
     start: () => player.hold(),
     end: (p) => {
@@ -32,6 +34,9 @@ export function playScore(score: Score, view: ScoreView, opts: PlaybackOptions):
     loop: opts.loop ?? false,
     metronome: opts.metronome ?? false,
     onSlot: (m, s) => view.highlight(m, s),
+    onFrame: (m, s, progress) => {
+      if (!reduce?.matches) view.glide(m, s, progress);
+    },
     onStop: () => {
       if (view.scrubber === scrubber) view.scrubber = null;
       view.cue(null);
