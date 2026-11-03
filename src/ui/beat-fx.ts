@@ -6,8 +6,11 @@ import { getBeatFx, onBeatFxChange, type BeatFx } from './prefs';
 /**
  * Beat emphasis effects for auto playback (an experiment the reader picks from). Driven by the
  * playing score: hit() when a note sounds, frame() every animation frame with the playhead's
- * progress between slots. Everything is transform and opacity on a handful of elements, so it
- * stays cheap on phones. Not used while scrubbing or playing along, and off with reduced motion.
+ * progress between slots. Every effect is animated here, frame by frame, through SVG geometry
+ * attributes: notes scale with a transform attribute around their own notehead's center, rings
+ * and glows grow by radius, the playhead by width. CSS transform-box and transform-origin
+ * resolve differently across browsers for SVG text (WebKit moves the glyph), so none are used.
+ * Not used while scrubbing or playing along, and off with reduced motion.
  */
 
 const NS = 'http://www.w3.org/2000/svg';
@@ -56,6 +59,77 @@ export interface BeatFxEngine {
 
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
 const smooth = (v: number) => v * v * (3 - 2 * v);
+const easeOut = (v: number) => 1 - (1 - v) ** 3;
+
+/** A notehead with what belongs to it (ghost parentheses), and the point it grows around. */
+interface Note {
+  head: SVGGraphicsElement;
+  parts: SVGGraphicsElement[];
+  cx: number;
+  cy: number;
+}
+
+/** A note growing and easing back: from 1 up to `peak` and back, or from `from` down to 1. */
+interface Grow {
+  note: Note;
+  start: number;
+  dur: number;
+  peak?: number;
+  from?: number;
+}
+
+/** A ring or glow spreading out from a note and fading. */
+interface Spread {
+  el: SVGCircleElement;
+  start: number;
+  dur: number;
+  r0: number;
+  r1: number;
+  o0: number;
+}
+
+/** The base transform an element had before an effect scaled it. */
+const BASE = 'fxBase';
+
+/**
+ * The center a notehead grows around, in its own coordinates: its glyph's horizontal middle
+ * (from the engraver's glyph width), and the baseline, which SMuFL noteheads are centered on
+ * vertically. Not the text's box: its height is the font's whole em box, and both its height
+ * and width differ between browsers.
+ */
+function noteOf(head: SVGGraphicsElement): Note {
+  const cx = Number(head.dataset.cx);
+  const box = Number.isFinite(cx) ? null : head.getBBox();
+  const parts = [head];
+  for (let e = head.nextElementSibling; e?.classList.contains('head-mark'); e = e.nextElementSibling) {
+    parts.push(e as SVGGraphicsElement);
+  }
+  return { head, parts, cx: box ? box.x + box.width / 2 : cx, cy: Number(head.getAttribute('y')) || 0 };
+}
+
+/** Scales a note in place, keeping any transform it already had. */
+function scaleNote(note: Note, s: number) {
+  for (const e of note.parts) {
+    if (e.dataset[BASE] === undefined) e.dataset[BASE] = e.getAttribute('transform') ?? '';
+    const base = e.dataset[BASE];
+    if (Math.abs(s - 1) < 1e-3) {
+      if (base) e.setAttribute('transform', base);
+      else e.removeAttribute('transform');
+      continue;
+    }
+    const { cx, cy } = note;
+    const k = s.toFixed(4);
+    e.setAttribute(
+      'transform',
+      `${base} translate(${cx.toFixed(2)} ${cy.toFixed(2)}) scale(${k}) translate(${(-cx).toFixed(2)} ${(-cy).toFixed(2)})`.trim(),
+    );
+  }
+}
+
+function unscaleNote(note: Note) {
+  scaleNote(note, 1);
+  for (const e of note.parts) delete e.dataset[BASE];
+}
 
 export function createBeatFx(ctx: BeatFxContext): BeatFxEngine {
   let hitAt = -Infinity;
@@ -67,12 +141,12 @@ export function createBeatFx(ctx: BeatFxContext): BeatFxEngine {
   let onsetsFor: RenderResult | null = null;
   let halo: SVGRectElement | null = null;
   let band: SVGRectElement | null = null;
-  let styledHead: SVGElement | null = null;
-  /** Noteheads currently grown by anticipation. */
-  let leaning: SVGElement[] = [];
+  let breathing: SVGRectElement | null = null;
+  /** Notes currently grown by anticipation. */
+  let leaning: Note[] = [];
   let leaningKey = '';
-  /** Ripples and glows still fading out. */
-  const transient = new Set<SVGElement>();
+  let grows: Grow[] = [];
+  let spreads: Spread[] = [];
 
   const on = () => current !== 'none' && !reduceMotion?.matches;
   const parts = () => VARIANTS[current];
@@ -91,17 +165,17 @@ export function createBeatFx(ctx: BeatFxContext): BeatFxEngine {
     return onsets;
   }
 
-  const heads = (m: number, s: number) =>
-    [...(ctx.result()?.columns.get(`${m}:${s}`)?.querySelectorAll<SVGElement>('.head') ?? [])];
+  const notes = (m: number, s: number) =>
+    [...(ctx.result()?.columns.get(`${m}:${s}`)?.querySelectorAll<SVGGraphicsElement>('.head') ?? [])].map(noteOf);
 
   const colorMode = () => document.documentElement.classList.contains('color-notes');
   /** The note's own color in color mode, else the highlight color. */
   const tint = (head: SVGElement) => (colorMode() && head.style.getPropertyValue('--c')) || 'var(--hl)';
 
   function clearLean() {
-    for (const h of leaning) {
-      h.style.removeProperty('transform');
-      h.style.removeProperty('fill');
+    for (const n of leaning) {
+      unscaleNote(n);
+      for (const e of n.parts) e.style.removeProperty('fill');
     }
     leaning = [];
     leaningKey = '';
@@ -112,17 +186,20 @@ export function createBeatFx(ctx: BeatFxContext): BeatFxEngine {
     halo = null;
     band?.remove();
     band = null;
-    if (styledHead) {
-      styledHead.style.removeProperty('transform');
-      styledHead.style.removeProperty('opacity');
-      styledHead = null;
+    if (breathing) {
+      const w = Number(breathing.getAttribute('width'));
+      breathing.setAttribute('x', (Number(breathing.getAttribute('x')) + w / 2 - 1).toFixed(2));
+      breathing.setAttribute('width', '2');
+      breathing.style.removeProperty('opacity');
+      breathing = null;
     }
   }
 
   function reset() {
-    for (const e of transient) e.remove();
-    transient.clear();
-    for (const a of ctx.result()?.svg.getAnimations({ subtree: true }) ?? []) if (a.id === 'fx') a.cancel();
+    for (const g of grows) unscaleNote(g.note);
+    grows = [];
+    for (const sp of spreads) sp.el.remove();
+    spreads = [];
     clearLean();
     clearPlayhead();
     hitAt = -Infinity;
@@ -138,61 +215,27 @@ export function createBeatFx(ctx: BeatFxContext): BeatFxEngine {
 
   // ---- On each note ----
 
-  function pop(head: SVGElement, amount: number, from = 1) {
-    const peak = 1 + 0.38 * amount;
-    head.animate(
-      from === 1
-        ? [{ transform: 'scale(1)' }, { transform: `scale(${peak})`, offset: 0.16 }, { transform: 'scale(1)' }]
-        : [{ transform: `scale(${from})` }, { transform: 'scale(1)' }],
-      { id: 'fx', duration: from === 1 ? 340 : 240, easing: 'cubic-bezier(0.2, 0.7, 0.3, 1)' },
-    );
+  function grow(note: Note, g: Omit<Grow, 'note' | 'start'>) {
+    grows = grows.filter((x) => x.note.head !== note.head);
+    grows.push({ note, start: performance.now(), ...g });
   }
 
-  function ripple(head: SVGElement, ring: number, glow: number) {
-    const parent = head.parentNode as SVGGElement | null;
+  function spread(note: Note, cls: string, color: string, r0: number, r1: number, o0: number, dur: number, front: boolean) {
+    const parent = note.head.parentNode as SVGGElement | null;
     if (!parent) return;
-    const box = (head as SVGGraphicsElement).getBBox();
-    const cx = box.x + box.width / 2;
-    const cy = box.y + box.height / 2;
-    const color = tint(head);
-    if (glow) {
-      const g = svgEl('circle', 'fx-glow');
-      g.setAttribute('cx', cx.toFixed(1));
-      g.setAttribute('cy', cy.toFixed(1));
-      g.setAttribute('r', (box.width * 0.95).toFixed(1));
-      g.style.fill = color;
-      parent.insertBefore(g, parent.firstChild);
-      transient.add(g);
-      g.animate(
-        [
-          { transform: 'scale(0.6)', opacity: 0.42 * glow },
-          { transform: 'scale(1.25)', opacity: 0 },
-        ],
-        { duration: 420, easing: 'ease-out' },
-      ).onfinish = () => {
-        g.remove();
-        transient.delete(g);
-      };
-    }
-    if (ring) {
-      const c = svgEl('circle', 'fx-ring');
-      c.setAttribute('cx', cx.toFixed(1));
-      c.setAttribute('cy', cy.toFixed(1));
-      c.setAttribute('r', (box.width * 0.7).toFixed(1));
-      c.style.stroke = color;
-      parent.appendChild(c);
-      transient.add(c);
-      c.animate(
-        [
-          { transform: 'scale(0.9)', opacity: 0.85 * ring },
-          { transform: 'scale(2.4)', opacity: 0 },
-        ],
-        { duration: 560, easing: 'cubic-bezier(0.1, 0.6, 0.3, 1)' },
-      ).onfinish = () => {
-        c.remove();
-        transient.delete(c);
-      };
-    }
+    const c = svgEl('circle', cls);
+    c.setAttribute('cx', note.cx.toFixed(2));
+    c.setAttribute('cy', note.cy.toFixed(2));
+    c.setAttribute('r', r0.toFixed(2));
+    c.style.opacity = String(o0);
+    if (cls === 'fx-ring') c.style.stroke = color;
+    else c.style.fill = color;
+    // A base transform on the notehead applies to its ripple too.
+    const base = note.head.dataset[BASE] ?? note.head.getAttribute('transform');
+    if (base) c.setAttribute('transform', base);
+    if (front) parent.appendChild(c);
+    else parent.insertBefore(c, parent.firstChild);
+    spreads.push({ el: c, start: performance.now(), dur, r0, r1, o0 });
   }
 
   function hit(m: number, s: number) {
@@ -201,22 +244,58 @@ export function createBeatFx(ctx: BeatFxContext): BeatFxEngine {
       lastFx = current;
     }
     if (!on()) return;
-    const list = heads(m, s);
+    const list = notes(m, s);
     if (!list.length) return;
     hitAt = performance.now();
     const p = parts();
-    // Anticipated heads hand over from their grown size; the column's highlight takes the color.
-    const leaned = new Map(leaning.map((h) => [h, h.style.transform]));
+    // Anticipated notes settle back from their grown size; the column's highlight takes the color.
+    const leaned = new Set(leaning.map((n) => n.head));
+    const grownTo = 1 + 0.24 * p.anticipate;
     clearLean();
-    for (const head of list) {
-      const grown = leaned.get(head);
-      if (p.anticipate && grown) pop(head, 0, 1 + 0.24 * p.anticipate);
-      else if (p.pop) pop(head, p.pop);
-      if (p.ripple || p.glow) ripple(head, p.ripple, p.glow);
+    for (const note of list) {
+      if (p.anticipate && leaned.has(note.head)) {
+        scaleNote(note, grownTo);
+        grow(note, { dur: 240, from: grownTo });
+      } else if (p.pop) grow(note, { dur: 340, peak: 1 + 0.38 * p.pop });
+      const w = 2 * Math.abs(note.cx - Number(note.head.getAttribute('x')));
+      const color = tint(note.head);
+      if (p.glow) spread(note, 'fx-glow', color, w * 0.57, w * 1.19, 0.42 * p.glow, 420, false);
+      if (p.ripple) spread(note, 'fx-ring', color, w * 0.63, w * 1.68, 0.85 * p.ripple, 560, true);
     }
   }
 
   // ---- Every frame ----
+
+  function animate(now: number) {
+    grows = grows.filter((g) => {
+      const t = clamp01((now - g.start) / g.dur);
+      let s: number;
+      if (g.from !== undefined) s = g.from + (1 - g.from) * easeOut(t);
+      else {
+        // Up fast to the peak, then ease back.
+        const up = 0.16;
+        const peak = g.peak ?? 1;
+        s = t < up ? 1 + (peak - 1) * easeOut(t / up) : 1 + (peak - 1) * (1 - smooth((t - up) / (1 - up)));
+      }
+      if (t >= 1) {
+        unscaleNote(g.note);
+        return false;
+      }
+      scaleNote(g.note, s);
+      return true;
+    });
+    spreads = spreads.filter((sp) => {
+      const t = clamp01((now - sp.start) / sp.dur);
+      if (t >= 1 || !sp.el.isConnected) {
+        sp.el.remove();
+        return false;
+      }
+      const e = easeOut(t);
+      sp.el.setAttribute('r', (sp.r0 + (sp.r1 - sp.r0) * e).toFixed(2));
+      sp.el.style.opacity = (sp.o0 * (1 - t)).toFixed(3);
+      return true;
+    });
+  }
 
   function findSys(m: number): TimelineSystem | null {
     return ctx.result()?.timeline.find((t) => t.measures.some((x) => x.index === m)) ?? null;
@@ -229,18 +308,20 @@ export function createBeatFx(ctx: BeatFxContext): BeatFxEngine {
     if (!halo || halo.ownerSVGElement !== svg) {
       halo?.remove();
       halo = svgEl('rect', 'fx-halo');
-      halo.setAttribute('width', String(1.6 * S));
       halo.setAttribute('rx', String(0.8 * S));
       svg.insertBefore(halo, ph);
     }
     const near = approach * approach * approach;
-    halo.setAttribute('x', (x - 0.8 * S).toFixed(2));
+    const hw = 0.8 * S * (0.55 + 0.6 * flash + 0.35 * near);
+    halo.setAttribute('x', (x - hw).toFixed(2));
+    halo.setAttribute('width', (2 * hw).toFixed(2));
     halo.setAttribute('y', sys.staffTop.toFixed(1));
     halo.setAttribute('height', (sys.staffBottom - sys.staffTop).toFixed(1));
     halo.style.opacity = (amount * (0.3 * flash + 0.14 * near)).toFixed(3);
-    halo.style.transform = `scaleX(${(0.55 + 0.6 * flash + 0.35 * near).toFixed(3)})`;
-    styledHead = ph;
-    ph.style.transform = `scaleX(${(1 + amount * (1.3 * flash + 0.6 * near - 0.25)).toFixed(3)})`;
+    breathing = ph;
+    const pw = 2 * (1 + amount * (1.3 * flash + 0.6 * near - 0.25));
+    ph.setAttribute('x', (x - pw / 2).toFixed(2));
+    ph.setAttribute('width', pw.toFixed(2));
     ph.style.opacity = (0.55 + amount * (0.4 * flash + 0.15 * near - 0.12)).toFixed(3);
   }
 
@@ -250,14 +331,14 @@ export function createBeatFx(ctx: BeatFxContext): BeatFxEngine {
     if (key !== leaningKey) {
       clearLean();
       leaningKey = key;
-      leaning = heads(Math.floor(next / slots), next % slots);
+      leaning = notes(Math.floor(next / slots), next % slots);
     }
     // Starts once the playhead is past a third of the way, so short gaps barely show it.
     const a = smooth(clamp01((approach - 0.35) / 0.65)) * amount;
-    for (const h of leaning) {
-      h.style.transform = `scale(${(1 + 0.24 * a).toFixed(3)})`;
-      const base = colorMode() ? 'var(--c, var(--ink))' : 'var(--ink)';
-      h.style.fill = `color-mix(in srgb, var(--hl) ${Math.round(a * 70)}%, ${base})`;
+    const base = colorMode() ? 'var(--c, var(--ink))' : 'var(--ink)';
+    for (const n of leaning) {
+      scaleNote(n, 1 + 0.24 * a);
+      for (const e of n.parts) e.style.fill = `color-mix(in srgb, var(--hl) ${Math.round(a * 70)}%, ${base})`;
     }
   }
 
@@ -301,6 +382,8 @@ export function createBeatFx(ctx: BeatFxContext): BeatFxEngine {
     const result = ctx.result();
     const sys = findSys(m);
     if (!result || !sys) return;
+    const now = performance.now();
+    animate(now);
     const p = parts();
     const slots = ctx.score().slots;
     const here = m * slots + s;
@@ -319,7 +402,7 @@ export function createBeatFx(ctx: BeatFxContext): BeatFxEngine {
     const nextAt = next >= 0 ? next : total + (list[0] ?? 0);
     const prevAt = prev >= 0 ? prev : (list[list.length - 1] ?? 0) - total;
     const approach = clamp01((here + progress - prevAt) / Math.max(1e-6, nextAt - prevAt));
-    const flash = Math.exp(-(performance.now() - hitAt) / 150);
+    const flash = Math.exp(-(now - hitAt) / 150);
 
     if (p.breathe) breathe(p.breathe, x, flash, approach, sys);
     if (p.anticipate) lean(p.anticipate, next >= 0 ? next : (list[0] ?? -1), approach);

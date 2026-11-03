@@ -1975,16 +1975,6 @@ input[type='range'] {
 
 /* ---------- Beat effects (experiment) ---------- */
 
-/* Grow noteheads and the playhead around their own centers, not the staff's. */
-.score .head,
-.score .playhead,
-.score .fx-halo,
-.score .fx-ring,
-.score .fx-glow {
-  transform-box: fill-box;
-  transform-origin: center;
-}
-
 .score .fx-halo,
 .score .fx-band,
 .score .fx-ring,

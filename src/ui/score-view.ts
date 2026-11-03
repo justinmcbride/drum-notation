@@ -245,7 +245,9 @@ export function mountScore(
       // Behind the notes, so a highlighted note stays readable on top of it.
       view.result.svg.insertBefore(playhead, view.result.svg.firstChild);
     }
-    playhead.setAttribute('x', ((glideTo ?? at.x) - 1).toFixed(2));
+    // Centered on the slot, at whatever width a beat effect gave it.
+    const width = Number(playhead.getAttribute('width')) || 2;
+    playhead.setAttribute('x', ((glideTo ?? at.x) - width / 2).toFixed(2));
     playhead.setAttribute('y', at.sys.staffTop.toFixed(1));
     playhead.setAttribute('height', (at.sys.staffBottom - at.sys.staffTop).toFixed(1));
   }
